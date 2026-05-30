@@ -336,7 +336,9 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 ## Development Process Overview
 
 ### Approach
-This plan is based on the 7-PR migration sequence defined above, covering the ~11-week period from **June 1, 2026 (Monday)** to **August 15, 2026 (Saturday)**, divided into 5 Sprints. Each Sprint is 2 weeks (the final sprint includes a 1-week buffer). **Note:** 11 weeks is the low end of the strategy's 10-15 week estimate, so schedule buffer is thin — R2 (field-tagging UX) and R3 (per-surface prompt tuning) are the most likely sources of slip.
+This plan covers **Jun 1 – Aug 15 2026**, split into **5 development Sprints + a 2-week Test & Polish phase**. Sprints run **Mon–Fri**. Development must be feature-complete by **2026-08-01 (Fri)** — the development cutoff. **Aug 3 (Mon) – Aug 15 (Sat)** is reserved for QA, regression fixes, and polish: no new feature code.
+
+Sprints 1–4 are 2 weeks each (10 working days). **Sprint 5 is compressed to 1 week** (Jul 27 – Aug 1) to free up the 2-week Test & Polish window — this puts significant scope pressure on PR 13 + PR 14, originally scoped to 3 weeks (2 dev + 1 buffer). Scope cuts at the Week-8 checkpoint are likely.
 
 ### Development Principles
 1. **Layered Construction**: Each PR builds on the previous one's infrastructure. PR 9 is the foundation of everything.
@@ -354,14 +356,16 @@ PR 12 ──→ PR 13 (rich contextual AI content)
 PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 ```
 
-### Sprint Calendar
-| Sprint | Date Range | PRs | Focus |
-|--------|-----------|-----|-------|
-| Sprint 1 | Jun 1 – Jun 13 | PR 9 | Foundation + Client Wrapper |
-| Sprint 2 | Jun 16 – Jun 27 | PR 10 | Unified Email Component |
-| Sprint 3 | Jun 30 – Jul 11 | PR 11 + PR 11p | Agent Migration + Field-Tagging UI |
-| Sprint 4 | Jul 14 – Jul 25 | PR 12 | Remaining Context Blocks |
-| Sprint 5 | Jul 28 – Aug 15 | PR 13 + PR 14 | Recommendation Actions + Today Page |
+### Sprint Calendar (revised 2026-05-29)
+
+| Sprint | Start (Mon) | End (Fri) | PRs | Focus |
+|--------|-------------|-----------|-----|-------|
+| Sprint 1 | 2026-06-01 | 2026-06-12 | PR 9 | Foundation + Client Wrapper |
+| Sprint 2 | 2026-06-15 | 2026-06-26 | PR 10 | Unified Email Component |
+| Sprint 3 | 2026-06-29 | 2026-07-10 | PR 11 + PR 11p | Agent Migration + Field-Tagging UI |
+| Sprint 4 | 2026-07-13 | 2026-07-24 | PR 12 | Remaining Context Blocks |
+| Sprint 5 | 2026-07-27 | 2026-08-01 | PR 13 + PR 14 | Recommendation Actions + Today Page (compressed) |
+| Test & Polish | 2026-08-03 | 2026-08-15 | — | QA, regression fixes, polish — no new feature code |
 
 ### Decision Checkpoints
 - **Week 4 (after PR 10):** Is the unified email component working as keystone? If not → cut journey-content to v2, lean on templates.
