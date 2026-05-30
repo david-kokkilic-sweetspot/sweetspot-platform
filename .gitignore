@@ -1,0 +1,13 @@
+# Inner repositories — tracked as separate remotes, not embedded here.
+repostories/*
+
+# macOS junk
+.DS_Store
+
+# Personal IDE/workspace config
+*.code-workspace
+
+# Claude Code per-user config
+.agents/
+skills-lock.json
+.claude/
