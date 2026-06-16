@@ -450,22 +450,25 @@ PR 12 ──→ PR 13 (rich contextual AI content)
 PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 ```
 
-### Sprint Calendar (revised 2026-05-29)
+### Sprint Calendar (revised 2026-06-16 — v2 brief alignment)
 
 | Sprint | Start (Mon) | End (Fri) | PRs | Focus |
 |--------|-------------|-----------|-----|-------|
-| Sprint 1 | 2026-06-01 | 2026-06-12 | PR 9 | Foundation + Client Wrapper |
-| Sprint 2 | 2026-06-15 | 2026-06-26 | PR 10 | Unified Email Component |
-| Sprint 3 | 2026-06-29 | 2026-07-10 | PR 11 + PR 11p | Web Agent Cleanup + Field-Tagging UI _(PR 11 Web Agent scope → v1.1; field-tagging stays at launch)_ |
-| Sprint 4 | 2026-07-13 | 2026-07-24 | PR 12 | Context Blocks + Surface Parity Wiring _(**v1.1 per v2 brief** — out of launch scope; remaining context blocks deferred to v1.1)_ |
-| Sprint 5 | 2026-07-27 | 2026-08-01 | PR 13 + PR 14 | Recommendation Actions + Today Page _(**v1.1 per v2 brief** — entire EPIC 5 deferred)_ |
-| §5.10 Hotfix | parallel with Sprints 2-3 | — | Story 1.8 hotfix PR series | Capture-surface data layer (org/profile/KB + industry templates) per v2 brief §5.10 |
+| Sprint 1 | 2026-06-01 | 2026-06-12 | PR 9 | Foundation + Client Wrapper — _shipped_ |
+| Sprint 2 | 2026-06-15 | 2026-06-26 | PR 10 | Unified Email Component (5 tasks) |
+| Sprint 3 | 2026-06-29 | 2026-07-10 | PR 11 (3.1.1 only) + PR 11p | Field-Tagging UI (3.2.x) + Product Agent Definition (3.1.1). 3.1.2 + 3.1.3 demoted to v1.1 per v2 brief (journey + Web Agent deferred). |
+| Sprint 4 | 2026-07-13 | 2026-07-24 | PR 12 (SPLIT) | Launch parts only: 4.2.1 (field-semantics) + 4.2.2 (audience) + 4.3.2 (knowledge) + 4.5.1 (composition registry) + 4.6.5a (knowledge wiring) + 4.6.7 (feature registry). Story 4.1, 4.3.1, 4.4.1, 4.6.1 refinement, 4.6.2/3/4/6 → v1.1 backlog. |
+| Sprint 5 | 2026-07-27 | 2026-08-01 | _no PR 13/14_ | EPIC 5 fully v1.1 per v2 brief (Recommendation Actions + Today Page deferred). Pre-Launch Verification Gates (5.3.1 + 5.3.2) run here + into Test & Polish. |
+| §5.10 Hotfix track | parallel Sprints 2-4 | — | Story 1.8 (1.8.5/1/2/3 shipped; 1.8.4/6/7/8/9 follow-up) | Capture-surface data layer + BFF endpoints + HNSW per v2 §5.10 + §5.8 |
+| **Story 1.9 hotfix** | parallel Sprints 3-4 | — | Story 1.9 PR series | Launch context blocks (profile/event/brief/contact-fields) + form generation feature per v2 §4.2 + §5.6 |
+| **Story 1.10** | Sprint 4 | — | Story 1.10 PR series | Launch readiness docs: handover README + Foundry memo + hour sign-off per v2 §5.1 + §5.9 |
+| **Pre-Launch Verification Gates** | Sprint 5 + Test & Polish | — | Story 5.3 (reframed) | Observability + GDPR compliance gates per v2 §13 + §5.9 |
 | Test & Polish | 2026-08-03 | 2026-08-15 | — | QA, regression fixes, polish — no new feature code |
 
 ### Decision Checkpoints
 - **Week 4 (after PR 10):** Is the unified email component working as keystone? If not → cut journey-content to v2, lean on templates.
-- **Week 8 (after PR 12):** Has the field-tagging UI shipped and are users tagging? If not → audience block returns sparse data, Phase 2 at half power.
-- **Week 10 (after PR 13):** Is recommendation→action producing acceptable content? If not → allocate prompt-tuning time before PR 14.
+- **Week 8 (after PR 12 launch parts):** Have the field-tagging UI + 9 launch context blocks shipped and is the composition registry routing them correctly? If not → tighten Story 1.9 / 4.x scope and prioritise email feature parity.
+- **Week 10 (Sprint 5):** Pre-Launch Verification Gates running clean? If not → focus Test & Polish window on gate remediation.
 
 ---
 
@@ -679,13 +682,130 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 - Subtask: **Do not write a Deop-side migration for `brand_settings`** — Click owns it end-to-end
 - Depends on: Click ships the schema
 
+**Task 1.8.6: Organisation-Setup BFF Endpoint** _(follow-up to 1.8.1; launch)_
+- Subtask: New `OrganisationSetupController` under `Core/BackendForFrontend/SSP.BackendForFrontend.Api/Controllers/`
+- Subtask: `PUT bff/accounts/{accountId:guid}/organisation-setup` — accepts IndustryTemplateId, PrivacyUrl, Website, PostalCode, State, Timezone, Locale (all nullable; partial updates allowed)
+- Subtask: Workflow + request/response model + AccountId injection + `[SessionAuthorize(Roles="admin,globalAdmin")]` + `[ValidateCsrf]`
+- Subtask: Admin API client + Admin controller + Admin workflow + DTO threading the new columns
+- Subtask: Unit tests (entity config, workflow, endpoint smoke for 401/200)
+- Depends on: Task 1.8.1 (shipped — data layer)
+
+**Task 1.8.7: Organisation-Profile + Voice-Samples BFF Endpoints** _(follow-up to 1.8.2; launch)_
+- Subtask: New `OrganisationProfileController` with endpoints: GET / PUT profile; GET / POST / DELETE voice-samples; voice-sample server-side truncation to 8000 chars enforced before persistence
+- Subtask: Workflow + request/response models per endpoint
+- Subtask: Admin API client + Admin controller + Admin workflow pipeline
+- Subtask: Unit tests (truncation, profile upsert idempotency, voice-sample max-count enforcement, cross-account isolation)
+- Depends on: Task 1.8.2 (shipped — data layer + reader seam)
+
+**Task 1.8.8: KB Document Upload + Ingest Workflow + Search Endpoint** _(follow-up to 1.8.3; launch — §5.8 completion)_
+- Subtask: BFF `KnowledgeBaseController` — POST documents (blob URL + mime), GET documents list, DELETE document (cascade chunks), POST search (query text → embedding → top-K kb_chunks)
+- Subtask: Ingest workflow — chunk source text (fixed ~1000 token chunks), batch-embed via `IEmbeddingClient`, persist chunks with ingest_status transitions (pending → processing → ready/failed)
+- Subtask: Search workflow — embed query, cosine-distance top-K query against kb_chunks (sequential scan acceptable; HNSW lands via 1.8.9)
+- Subtask: Throttle + retry strategy at ingest pipeline (Polly wrapper around `IEmbeddingClient`)
+- Subtask: Unit tests (chunking determinism, ingest pipeline state machine, search endpoint smoke)
+- Depends on: Task 1.8.3 (shipped — tables + embedding adapter)
+
+**Task 1.8.9: HNSW Similarity Index on `kb_chunk.embedding`** _(launch — perf gate)_
+- Subtask: Decision spike — Foundry text-embedding-3-large `dimensions=1536` vs pgvector 0.7+ halfvec(3072). Document rationale in Task 1.10.2 memo.
+- Subtask: Migration adds HNSW index using cosine ops on the chosen embedding column
+- Subtask: Verify similarity-search latency on a sample KB (~10k chunks) drops below sequential-scan baseline
+- Depends on: Task 1.8.8 (search endpoint to verify), Foundry dim decision
+
 === PR-Hotfix series for Story 1.8 ===
-> **Scope:** v2 scope-brief §5.10 capture-surface data layer. Five capture-surface tasks shipped as independent hotfix PRs in parallel with Sprints 2-3.
-> **Order:** 1.8.5 (FK target) → 1.8.1 (Account hotfix) → 1.8.2 (profile) → 1.8.3 (KB). 1.8.4 coordination parallel.
-> **Customer-visible:** No (data layer only; UI work belongs to Click).
+> **Scope:** v2 scope-brief §5.10 capture-surface data layer + BFF write endpoints + KB ingest/search completion. Nine task hotfix series across Sprints 2-4.
+> **Order:** 1.8.5 (FK target) → 1.8.1 (Account hotfix) → 1.8.2 (profile) → 1.8.3 (KB data layer) → 1.8.6 (org-setup BFF) → 1.8.7 (profile BFF) → 1.8.8 (KB BFF + ingest + search) → 1.8.9 (HNSW). 1.8.4 coordination parallel.
+> **Customer-visible:** No (data layer + BFF endpoints consumed by Click Angular UIs).
 > **Review:** Per PR.
 >
-> **Status (2026-06-16):** 1.8.5 + 1.8.1 + 1.8.2 + 1.8.3 data layers shipped on `deop/feature/section-5.10-capture-data-layer` (commits `165e533e8`, `1b02bdded`, `7f4106bad`, `77df28121`). BFF write endpoints for org-setup / profile / voice-samples / KB upload and HNSW similarity index for `kb_chunk.embedding` deferred to follow-up commits. 1.8.4 awaits Click brand_settings schema delivery.
+> **Status (2026-06-16):** 1.8.5 + 1.8.1 + 1.8.2 + 1.8.3 data layers shipped on `deop/feature/section-5.10-capture-data-layer` (commits `165e533e8`, `1b02bdded`, `7f4106bad`, `77df28121`, merged to `deop/integration` as `93ae58617`). BFF write endpoints (1.8.6/7/8), HNSW index (1.8.9), and brand_settings reader hookup (1.8.4) are upcoming follow-up commits.
+
+---
+
+### Story 1.9: Launch Context Blocks + Form Generation
+> Added per v2 scope brief §4.2 (9 launch context blocks) + §5.6 (form generation feature). Closes the gap left by PR 12's blanket v1.1 deferral — these five tasks ship the remaining launch-required context blocks plus the form generation feature, all as a hotfix track running in parallel with Sprints 3-4.
+>
+> The §4.2 nine-block requirement is satisfied by: brand (Story 1.4 shipped) + org (Story 1.4 shipped) + industry (Story 1.4 shipped) + profile (Task 1.9.2) + event (Task 1.9.3) + brief (Task 1.9.4) + contact-fields (Task 1.9.5) + knowledge (Task 4.3.2 promoted) + field-semantics (Task 4.2.1 promoted).
+
+**Task 1.9.1: Form Generation Feature (basic)** — _launch_
+- Subtask: New `/forms/generate` BFF endpoint composing brand + org + industry context for structured form JSON output
+- Subtask: New `FormGeneratePromptBuilder` + `FormGenerateOutput` schema under `SSP.AI/Prompts/FormGenerate/` + `SSP.AI/Schemas/FormGenerate/`, validated via `IAiOutputValidator`
+- Subtask: Persist generated form via the forms table; return form_id for client navigation
+- Subtask: Feature key `form-generate` registered in the AI feature registry (Task 4.6.7)
+- Subtask: Unit tests for prompt builder + schema validation; integration test for end-to-end generation
+- Depends on: PR 9 wrapper, PR 9 brand/org/industry blocks
+
+**Task 1.9.2: ProfileContextBlock** — _launch_
+- Subtask: New `ProfileContextBlock` under `SSP.AI/Context/Profile/` consuming `IOrganisationProfileReader` (seam shipped in Story 1.8.2)
+- Subtask: Typed `ProfileContext` record with `Exists`, audience description, tier names, programme names, terminology preferences, voice samples (top 5)
+- Subtask: `ToPromptString()` formats as tonal/audience hints under `## Profile`
+- Subtask: Graceful degradation (no profile row → `ProfileContext.Empty`); never throws
+- Subtask: DI registration in `AddAiServices`
+- Subtask: Unit tests (empty path, populated path, voice-sample cap)
+- Depends on: Task 1.8.2 (shipped — `IOrganisationProfileReader`)
+
+**Task 1.9.3: EventContextBlock** — _launch_
+- Subtask: New `EventContextBlock` under `SSP.AI/Context/Event/` reading `events` table via `ITenantDbContextFactory`
+- Subtask: Parameter-driven via `AiContextOptions.EventId`; returns event name, date, location, registration URL
+- Subtask: Typed `EventContext` record + `ToPromptString()` under `## Event`
+- Subtask: Graceful degradation when no event_id or event missing
+- Subtask: DI registration; unit tests
+- Depends on: PR 9 context block base; events table (existing)
+
+**Task 1.9.4: BriefContextBlock** — _launch_
+- Subtask: New `BriefContextBlock` under `SSP.AI/Context/Brief/` reading `event_briefs` table (or equivalent) via `ITenantDbContextFactory`
+- Subtask: Loads positioning, key messages, target audience for the given event_id; pairs with `EventContextBlock`
+- Subtask: Typed `BriefContext` record + `ToPromptString()` under `## Brief`
+- Subtask: Graceful degradation; DI registration; unit tests
+- Depends on: Task 1.9.3 (event id context); event briefs table (existing or to be confirmed with Click)
+
+**Task 1.9.5: ContactFieldsContextBlock** — _launch_
+- Subtask: New `ContactFieldsContextBlock` under `SSP.AI/Context/ContactFields/` reading `contact_field_definitions` (system + template + custom) via `ITenantDbContextFactory`
+- Subtask: Surfaces merge tags + usage guidance so AI-generated copy uses tags that resolve at send time
+- Subtask: Typed `ContactFieldsContext` record + `ToPromptString()` under `## Contact Fields`
+- Subtask: Graceful degradation when account has no custom fields
+- Subtask: DI registration; unit tests
+- Subtask: Coordinate with Task 4.2.1 (Field-Semantics block) — this block surfaces tag definitions while 4.2.1 surfaces semantic metadata (field tags)
+- Depends on: PR 11p field tagging UI (Task 1.5.2 system/template tag seed; Task 3.2.x customer tags)
+
+=== PR-Hotfix series for Story 1.9 ===
+> **Scope:** Five-task hotfix series shipping the remaining launch context blocks + the form generation feature in parallel with Sprints 3-4.
+> **Order:** 1.9.1 (form gen — independent) parallel with 1.9.2 (profile) → 1.9.3 (event) → 1.9.4 (brief) → 1.9.5 (contact fields). 1.9.5 depends on PR 11p field-tagging completion.
+> **Customer-visible:** Yes (form generation 1.9.1); no (context blocks 1.9.2-5).
+> **Review:** Per PR.
+
+---
+
+### Story 1.10: Launch Readiness Documentation
+> Added per v2 scope brief §5.1 (Foundry model spike + memo) + §5.9 (handover documentation). These are documentation-only deliverables — not feature code — but explicit v2 launch requirements without which the engagement cannot be considered complete.
+
+**Task 1.10.1: `/AI/README.md` Handover Documentation** — _launch (Sprint 4)_
+> v2 brief §5.9: "A README in the SSP repo at `/AI/README.md` describes: how the wrapper is called, what context blocks exist, how to add a new feature, the cost model, the model selection logic, the spend cap, the retry behaviour, the schema validation contract. The Click engineering team can onboard a new engineer to the substrate using this document plus the prototype, without a Deop person in the room."
+- Subtask: README at `src/backend/Core/AI/README.md` (or repo equivalent) covering wrapper API contract, context block catalogue (9 blocks + composition registry), feature key registry reference, cost/spend-cap model, retry behaviour, schema validation contract, content filtering invariants, multi-tenant isolation rules
+- Subtask: Cross-reference Pre-Launch Verification Gates (Gates 5.3.1 + 5.3.2) so the README serves as the onboarding entry point for Click long-term substrate owner
+- Subtask: Click engineering review + sign-off
+- Depends on: PR 9 shipped, Story 1.8 shipped, Story 1.9 shipped, Task 4.6.7 (Feature Key Registry) shipped
+
+**Task 1.10.2: Foundry Model Spike + 1-Page Memo** — _launch (Sprint 4)_
+> v2 brief §5.1: "Foundry integration: model availability spike and SDK selection. Confirmed which Foundry-hosted models map to the prototype's generation / classification / reasoning model classes (Sonnet-class, Haiku-class, Opus-class). Confirmed the SDK. One-page memo lands in the SSP repo with the model strings the wrapper will use."
+- Subtask: Spike — verify Foundry-hosted deployment names for Sonnet-class / Haiku-class / Opus-class equivalents; document capacity / rate limits per region
+- Subtask: Confirm embedding deployment dimensions decision (3072 vs 1536) tied to Task 1.8.9 HNSW prerequisite
+- Subtask: 1-page memo at `docs/ai-foundry-models-launch-memo.md` covering: deployment name table, region/residency, rate limits, fallback model strategy, cost-table reference
+- Subtask: Cross-reference into Task 1.10.1 README + Task 4.6.7 Feature Registry
+- Depends on: Task 1.2.5 shipped (Foundry adapter)
+
+**Task 1.10.3: §5.10 Hour Estimate Sign-off** — _launch (Sprint 1-4 ongoing)_
+> v2 brief §5.10 lists rough hour estimates for Story 1.8 (organisation setup 8h + organisation profile 14h + KB 8h, brand kit 0h). With added Tasks 1.8.6/7/8/9 (~42h follow-up) plus Story 1.9 (~38h) plus Story 1.10 (~14h) the total launch backlog grew. Deop signs off on final estimates against the 545.5h budget; v1.1 demoted tasks (Stories 5.1/5.2 + EPIC 4 demotions) free hours.
+- Subtask: Tabulate all launch task estimates (Stories 1.x + 2.x + 3.x + promoted 4.x + 1.9 + 1.10) against the 545.5h budget
+- Subtask: Tabulate v1.1 demoted task hours as the offset (released budget)
+- Subtask: Net budget delta — confirm launch fits within 545.5h or escalate
+- Subtask: Sign-off captured in `docs/ai-arch-scope.md` Sprint Calendar trailer + this task entry
+- Depends on: Reclassification of Stories 1.8/1.9/1.10 + Stories 3.1/4.x/5.x complete (this scope-doc edit)
+
+=== PR-Hotfix series for Story 1.10 ===
+> **Scope:** Three-task documentation + spike series finalising launch readiness per v2 §5.1 + §5.9.
+> **Order:** 1.10.2 (Foundry memo — Sprint 1 ideally; late is acceptable) → 1.10.1 (handover README, depends on shipped features) → 1.10.3 (hour sign-off, ongoing tabulation).
+> **Customer-visible:** No (documentation).
+> **Review:** Per task.
 
 ---
 
@@ -739,21 +859,23 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 **Sprint 3 (Jun 30 – Jul 11)**
 
 ### Story 3.1: Form/Event Confirmation Handler Migration
-> Form/event confirmation senders stop being treated as agents → journeys take over. Web Agent remains the only customer-facing product agent type.
+> Form/event confirmation senders stop being treated as agents. Web Agent remains the only customer-facing product agent type. **Per v2 scope brief: journey-based migration deferred to v1.1; Click engineering's existing (legacy) confirmation email implementation is preserved at launch.**
 
-**Task 3.1.1: Product Agent Definition (Web Agent Only)**
+**Task 3.1.1: Product Agent Definition (Web Agent Only)** _(launch — organizational clarity)_
 - Subtask: Apply "Agent" = Web Agent: customer-facing multi-turn website/chat experience
 - Subtask: Reclassify single-call email senders, form generators, event generators, strategy workflows, and insights workflows as handlers/generators/workflows
 - Subtask: Update user-facing labels and internal planning language so Form Agent and Event Agent are not treated as product agent types
 - Depends on: PR 10
 
-**Task 3.1.2: Confirmation Email → Journey Migration**
+**Task 3.1.2: Confirmation Email → Journey Migration** — **v1.1 (DEMOTED per v2 brief)**
+- Rationale: v2 brief §6 defers the journey builder from Aug 15; the confirmation-email-as-journey migration depends on it. Click's existing legacy confirmation email implementation continues to ship form/event confirmations at launch unchanged.
 - Subtask: Move form-submission and event-registration confirmation email creation logic to journeys
 - Subtask: Journey's first step = confirmation email
 - Subtask: Implement .ics attachment as journey-email feature
-- Depends on: 3.1.1
+- Depends on: 3.1.1 + journey builder shipping (v1.1)
 
-**Task 3.1.3: Web Agent / Inbox Runtime Narrowing**
+**Task 3.1.3: Web Agent / Inbox Runtime Narrowing** — **v1.1 (DEMOTED per v2 brief)**
+- Rationale: Web Agent feature itself is v1.1 (brief §6 "Phase 2 AI capabilities"), so the runtime narrowing follows. Legacy Form Agent / Event Agent runtimes stay in place at launch.
 - Subtask: Remove separate Form Agent and Event Agent runtime surfaces
 - Subtask: Route any needed inbound conversation handling through the Web Agent / inbox conversation model with original registration context
 - Subtask: Remove HTML generation duplication (email-generate / form confirmation / event confirmation)
@@ -761,8 +883,8 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 - Depends on: 3.1.2
 
 === PR 11: Web Agent Cleanup + Form/Event Confirmation Migration ===
-> **Scope:** Form/event confirmation senders stop being treated as agents, journeys take over, Web Agent remains the only product agent type, HTML duplication removed.
-> **Customer-visible:** Partial (agent behavior change)
+> **Scope (revised per v2 brief):** Only Task 3.1.1 (Product Agent Definition — organizational/labelling clarity) lands at launch. Tasks 3.1.2 (Confirmation → Journey) and 3.1.3 (Web Agent Runtime Narrowing) deferred to v1.1 alongside the journey builder and Web Agent feature.
+> **Customer-visible:** No (labelling change only at launch).
 > **Review:** Mid-Sprint 3 (Jul 7)
 
 ### Story 3.2: Field-Tagging UI (Settings Page)
@@ -796,76 +918,84 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 ## EPIC 4: Context Blocks + AI Surface Parity Wiring
 **Sprint 4 (Jul 14 – Jul 25)**
 
-### Story 4.1: Methodology & Plan Context Blocks
+### Story 4.1: Methodology & Plan Context Blocks — **v1.1 (out of launch scope)**
 > Load marketing methodology and plan contexts.
+> _v2 brief §4.2 does not list methodology or plan as launch context blocks; both depend on the marketing-plan feature which is post-launch._
 
-**Task 4.1.1: Methodology Context Block**
+**Task 4.1.1: Methodology Context Block** — _v1.1_
 - Subtask: Load data from `marketing_disciplines`, `goal_types`, `programmes`, `tag_labels` tables
 - Subtask: Graceful degradation
 - Depends on: PR 9 (context block base)
 
-**Task 4.1.2: Plan Context Block**
+**Task 4.1.2: Plan Context Block** — _v1.1_
 - Subtask: Load data from `marketing_plans` + `plan_goals` + `plan_programmes` tables
 - Depends on: PR 9
 
-### Story 4.2: Field-Semantics & Audience Context Blocks
+### Story 4.2: Field-Semantics & Audience Context Blocks — **launch (PROMOTED per v2 brief)**
 > Load contact field semantics and audience context.
+> _v2 brief §4.2 lists contact-field-semantics as one of the 9 launch context blocks; audience composition is required by the email-generation feature (brief §5.5)._
 
-**Task 4.2.1: Field-Semantics Context Block**
+**Task 4.2.1: Field-Semantics Context Block** — _launch_
 - Subtask: Load semantic data from `contact_field_definitions` extension columns
 - Depends on: PR 11p (field tags populated)
 
-**Task 4.2.2: Audience Context Block**
+**Task 4.2.2: Audience Context Block** — _launch_
 - Subtask: Build audience context from `audiences` + `audience_contacts` + field-semantics block
 - Subtask: `audience_contexts` materialized view/table schema migration
 - Depends on: 4.2.1
 
-### Story 4.3: Insights & Knowledge Context Blocks
+### Story 4.3: Insights & Knowledge Context Blocks — **split (Insights v1.1; Knowledge promoted to launch)**
 > Cross-org benchmarks and knowledge base integration.
 
-**Task 4.3.1: Insights Context Block**
+**Task 4.3.1: Insights Context Block** — _v1.1 (out of launch scope per v2 brief §6 "Cross-org analytics, benchmarks, the insights block. Defer to v1.1.")_
 - Subtask: Cross-org aggregate benchmarks (privacy-respecting)
 - Subtask: Minimum-N threshold (5-10) — below threshold → return "n/a"
 - Subtask: Cross-org reporting via separate service-role view
 - Depends on: PR 9
 
-**Task 4.3.2: Knowledge Context Block**
-- Subtask: KB tables — per-org + curated content
-- Subtask: Vector search Top-K, filter by `org_id`
+**Task 4.3.2: Knowledge Context Block** — **launch (PROMOTED per v2 brief)**
+> v2 §4.2 lists knowledge as one of the 9 launch context blocks; §5.8 makes KB infrastructure a launch deliverable. KB tables and the Foundry embedding adapter shipped in Task 1.8.3; this block wires consumption into the AI substrate. Composition registry (4.5.1) routes it to features.
+- Subtask: KB tables — per-org + curated content _(shipped Task 1.8.3 — kb_documents / kb_chunks)_
+- Subtask: Vector search Top-K, filter by `org_id` _(uses `IEmbeddingClient` shipped in Task 1.8.3; sequential scan acceptable at launch until HNSW lands via Task 1.8.9)_
 - Subtask: Scope enforcement in retrieval function, not caller
 - Subtask: Generalize knowledge block from Web Agent-only to all eligible features
-- Depends on: PR 9
+- Depends on: PR 9, Task 1.8.3 (shipped)
 
-### Story 4.4: Assets Context Block
+### Story 4.4: Assets Context Block — **v1.1 (out of launch scope)**
 > Include content assets in AI context.
+> _v2 brief §4.2 does not list assets among the 9 launch context blocks; semantic asset search depends on the assets-enrichment pipeline which is post-launch._
 
-**Task 4.4.1: Assets Context Block**
+**Task 4.4.1: Assets Context Block** — _v1.1_
 - Subtask: Load enriched asset metadata from `content_assets` table
 - Subtask: Include only selected analysed metadata: `ai_description`, `dominant_colors`, `suggested_use`, `tone`, `is_analysed`
 - Subtask: Exclude raw files, full libraries, and unanalysed assets from prompts
 - Subtask: Document that semantic asset search waits for embeddings / pgvector
 - Depends on: PR 9
 
-### Story 4.5: Feature → Block Composition Wiring
+### Story 4.5: Feature → Block Composition Wiring — **launch (PROMOTED per v2 brief)**
 > Implement which blocks compose for each feature.
+> _Required at launch by v2 §5.4 (nine context blocks) + §5.5/5.6/5.7 features — without the registry, email/form/field-tagging features cannot resolve their context block sets._
 
-**Task 4.5.1: Composition Registry**
-- Subtask: Feature → blocks mapping registry (email-generate, journey-content, form-generate, Web Agent, strategy workflow, insights workflow, recommendation)
+**Task 4.5.1: Composition Registry** — _launch_
+- Subtask: Feature → blocks mapping registry (email-generate, form-generate, field-tagging at launch; journey-content / Web Agent / strategy / insights / recommendation registered as v1.1 stubs)
 - Subtask: Dynamic block loading based on feature configuration
-- Depends on: 4.1.1, 4.1.2, 4.2.2, 4.3.1, 4.3.2, 4.4.1
+- Depends on: launch context blocks (4.2.1, 4.2.2, 4.3.2, plus new 1.9.2/1.9.3/1.9.4/1.9.5)
 
 ### Story 4.6: Prototype AI Surface Parity Wiring
 > Make every AI surface from the Deop handover visible in the roadmap. These tasks define prompt/schema/context contracts and decide launch vs post-launch implementation per surface.
 
-**Task 4.6.1: Forms v2 Generation + Refinement Wiring**
-- Subtask: Port the Forms v2 generate/refine prompt contracts into .NET prompt classes
-- Subtask: Use brand + org + industry + profile + contact field context
-- Subtask: Validate against a typed `GeneratedFormDefinition` contract
-- Subtask: Define feature keys for form generation and refinement; do not leave Forms v2 on a legacy usage shim
-- Subtask: Confirm this is a structural JSON generator, not an agent
+**Task 4.6.1: Forms v2 Generation + Refinement Wiring** — **SPLIT (basic generation → Story 1.9.1 launch; refinement → v1.1)**
+- _Launch portion absorbed by Task 1.9.1 (basic form generation feature)_
+- _v1.1 portion (refinement workflow, broader Forms v2 surface) deferred_
+- Subtask: Port the Forms v2 generate/refine prompt contracts into .NET prompt classes — _refinement v1.1; basic generation handled by 1.9.1_
+- Subtask: Use brand + org + industry + profile + contact field context — _launch (1.9.1)_
+- Subtask: Validate against a typed `GeneratedFormDefinition` contract — _launch (1.9.1)_
+- Subtask: Define feature keys for form generation and refinement — _launch for generation key (1.9.1); refinement key v1.1_
+- Subtask: Confirm this is a structural JSON generator, not an agent — _organizational, lives in 4.6.7 registry_
 - Depends on: 4.5.1, 4.2.1
 
-**Task 4.6.2: Forms v2 Field Mapping Wiring**
+**Task 4.6.2: Forms v2 Field Mapping Wiring** — _v1.1 (out of launch scope)_
+- _Forms v2 broader feature (refinement + field mapping) is v1.1 per v2 brief §6_
 - Subtask: Preserve exact-match and synonym mapping before the AI call
 - Subtask: Use AI only for unresolved captured-form fields
 - Subtask: Return `map_existing`, `create_new`, or `dont_capture` with confidence per field
@@ -873,7 +1003,8 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 - Subtask: Define the `forms_v2_field_mapping` feature key and model class
 - Depends on: 4.2.1
 
-**Task 4.6.3: Landing Page Generation, Refinement, and Layout Switching Wiring**
+**Task 4.6.3: Landing Page Generation, Refinement, and Layout Switching Wiring** — _v1.1 (out of launch scope)_
+- _Landing page generation is v1.1 per v2 brief §6_
 - Subtask: Port landing-page generate/refine/fill-missing-block prompt contracts
 - Subtask: Use relaxed generation schemas and server-stamped IDs for page blocks
 - Subtask: Preserve the rule that AI does not emit URLs, page block IDs, or image asset IDs
@@ -881,7 +1012,8 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 - Subtask: Define feature keys for generation, refinement, and layout switch
 - Depends on: 4.5.1, 4.4.1
 
-**Task 4.6.4: Events Create-with-AI Surface Contract**
+**Task 4.6.4: Events Create-with-AI Surface Contract** — _v1.1 (out of launch scope)_
+- _Events Create-with-AI is v1.1 per v2 brief §6_
 - Subtask: Define event field extraction contract with nullable operational basics and marketing brief fields
 - Subtask: Define event journey structure contract for Invitations, Confirm, and Followup journeys
 - Subtask: Preserve `cta_intent` indirection so AI never emits raw URLs
@@ -889,14 +1021,16 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 - Subtask: Define feature keys for event extraction, journey structure, invite content, followup content, and regeneration
 - Depends on: PR 10, 4.5.1
 
-**Task 4.6.5: Web Agent Context and Knowledge Wiring**
-- Subtask: Rename customer-facing chat agent references to Web Agent
-- Subtask: Compose brand + org + industry + knowledge + conversation history
-- Subtask: Preserve response-length configuration and fallback-message behavior
-- Subtask: Confirm Web Agent is the only customer-facing product agent type
-- Depends on: 4.3.2, 4.5.1
+**Task 4.6.5: Web Agent Context and Knowledge Wiring** — **SPLIT (knowledge wiring → launch; Web Agent runtime → v1.1)**
+- _Knowledge wiring portion required at launch (composition of brand+org+industry+knowledge for the launch knowledge block). Web Agent feature itself is v1.1; runtime + chat surface deferred._
+- Subtask: Rename customer-facing chat agent references to Web Agent — _organizational, launch (handled by 3.1.1)_
+- Subtask: Compose brand + org + industry + knowledge + conversation history — _launch portion: brand+org+industry+knowledge composition wiring; conversation history wiring v1.1_
+- Subtask: Preserve response-length configuration and fallback-message behavior — _v1.1 (Web Agent runtime)_
+- Subtask: Confirm Web Agent is the only customer-facing product agent type — _organizational, launch_
+- Depends on: 4.3.2 (launch), 4.5.1 (launch)
 
-**Task 4.6.6: Profile Research, Insights Ask, Social Generate, and Inbound Classification Contracts**
+**Task 4.6.6: Profile Research, Insights Ask, Social Generate, and Inbound Classification Contracts** — _v1.1 (out of launch scope)_
+- _All four workflows are v1.1 per v2 brief §6_
 - Subtask: Document profile research as an onboarding extraction workflow with nullable per-field outputs
 - Subtask: Document insights ask as org-data Q&A with tenant-scoped context and traceable usage
 - Subtask: Document social generation as a content-generation workflow using the shared voice floor
@@ -904,25 +1038,27 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 - Subtask: Mark each workflow as launch, post-launch, or explicit product deferral before PR 13 starts
 - Depends on: 4.5.1
 
-**Task 4.6.7: AI Feature Key and Invariant Registry**
+**Task 4.6.7: AI Feature Key and Invariant Registry** — **launch (PROMOTED per v2 brief)**
+> Required at launch by v2 §5.9 (handover documentation). The registry is the structured surface from which the handover doc derives — without it the README cannot exhaustively describe feature keys, model classes, and invariants.
 - Subtask: Create a single registry of feature keys, model classes, prompt class, schema contract, context composition, and launch/deferred status for every AI surface
 - Subtask: Include the handover invariants: every call logs usage, spend cap before provider call, voice floor on content prompts, dash stripping on text output, schema validation, server-stamped IDs, no AI-emitted URLs, graceful failure, org/account scope on every call
 - Subtask: Add Forms v2 feature keys that are TBD in the handover
 - Subtask: Use the registry as the PR 13 readiness gate
-- Depends on: 4.6.1, 4.6.2, 4.6.3, 4.6.4, 4.6.5, 4.6.6
+- Depends on: launch features (1.5.1 email, 1.9.1 form, 3.2.3 field-tagging, 4.3.2 knowledge wiring, 4.2.1 field-semantics)
 
-=== PR 12: Context Blocks + AI Surface Parity Wiring ===
-> **Scope:** Remaining 7 context block services. Knowledge block generalized from Web Agent-only to all eligible features. Feature → block composition registry. Explicit surface contracts for Forms v2, field mapping, landing pages, Events Create-with-AI, Web Agent, profile research, insights/social/inbound classification, and feature-key/invariant registry.
+=== PR 12 (SPLIT per v2 brief): Launch parts + v1.1 backlog ===
+> **Launch parts (Sprint 4 in-scope):** Task 4.2.1 (Field-Semantics Block), 4.2.2 (Audience Context), 4.3.2 (Knowledge Block), 4.5.1 (Composition Registry), 4.6.1 launch portion (basic form gen, absorbed by Story 1.9.1), 4.6.5 launch portion (knowledge wiring), 4.6.7 (Feature Key Registry). These plus the new Story 1.9 launch context blocks (profile/event/brief/contact-fields) complete the v2 §4.2 nine-block requirement.
+> **v1.1 backlog (deferred):** Story 4.1 (Methodology/Plan), Task 4.3.1 (Insights), Task 4.4.1 (Assets), Task 4.6.1 refinement, 4.6.2 (Forms v2 field mapping), 4.6.3 (Landing pages), 4.6.4 (Events Create-with-AI), 4.6.5 v1.1 portion (Web Agent runtime + chat surface), 4.6.6 (Profile research / Insights ask / Social / Inbound).
 > **Customer-visible:** No — substrate/infrastructure.
 > **Review:** End of Sprint 4 (Jul 25)
 > **🔴 Decision Checkpoint (Week 8):** Has the field-tagging UI shipped and are users tagging?
 
 ---
 
-## EPIC 5: Recommendation Actions & Command Centre
-**Sprint 5 (Jul 28 – Aug 15)**
+## EPIC 5: Recommendation Actions & Command Centre — **v1.1 (entire epic, except Story 5.3 reframed as launch gate)**
+**Sprint 5 (Jul 28 – Aug 15)** — _Stories 5.1 + 5.2 deferred to v1.1 per v2 brief §6 "Phase 2 AI capabilities. Recommendation handlers, hyperpersonalisation per recipient, the Today / Plan command centre — all v1.1 and beyond." Story 5.3 reframed as Pre-Launch Verification Gates (see below)._
 
-### Story 5.1: Recommendation Action Handlers
+### Story 5.1: Recommendation Action Handlers — _v1.1_
 > "Build the campaign" action creates real audiences, journeys, and AI content.
 
 **Task 5.1.1: Recommendation Action Schema**
@@ -954,7 +1090,7 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 > **Review:** Mid-Sprint 5 (Aug 8)
 > **🔴 Decision Checkpoint (Week 10):** Is recommendation→action producing acceptable content?
 
-### Story 5.2: Today Page (Command Centre)
+### Story 5.2: Today Page (Command Centre) — _v1.1_
 > Insights revamp customer-facing surfaces.
 
 **Task 5.2.1: Today Page (Insights Command Centre)**
@@ -978,26 +1114,30 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 - Subtask: Keyboard shortcuts
 - Depends on: 5.2.1
 
-### Story 5.3: Launch Readiness — Observability & Compliance
-> Pre-launch observability and compliance checklist.
+=== PR 14: Today Page + Retain Dashboard + Command Palette === — _v1.1_
+> **Scope:** Insights command centre, Today page, recommendation cards, Retain dashboard, command palette. Deferred to v1.1 per v2 brief §6.
+> **Customer-visible:** Yes (post-launch).
+> **Review:** Post-launch (v1.1)
 
-**Task 5.3.1: Observability Verification**
-- Subtask: Verify cost tracking per org/feature/month
-- Subtask: Verify latency tracking per feature
-- Subtask: Verify validation retry logging
-- Subtask: Verify `trace_id` audit linkage end-to-end
-- Depends on: PR 13
+---
 
-**Task 5.3.2: GDPR Compliance Check**
-- Subtask: Mandatory GDPR requirements checklist
-- Subtask: Verify PII detection in outputs
-- Subtask: Verify content filtering and redaction logging
-- Depends on: 5.3.1
+## Pre-Launch Verification Gates (cross-cutting, Sprint 5 + Test & Polish)
 
-=== PR 14: Today Page + Retain Dashboard + Command Palette ===
-> **Scope:** Insights command centre, Today page, recommendation cards, Retain dashboard, command palette. Launch-ready surface.
-> **Customer-visible:** Yes — launch-ready.
-> **Review:** End of Sprint 5 (Aug 15)
+> Story 5.3 reframed: these are not feature tasks but **launch acceptance gates** run in parallel with development. Per v2 brief §13 (compliance) + §5.9 (handover), every gate must pass before Aug 15 launch. Owned by Deop + Click engineering jointly.
+
+**Gate 5.3.1: Observability Verification** — _launch gate (Sprint 5 + Test & Polish)_
+- Verify cost tracking per org/feature/month from `ai_usage` aggregate queries
+- Verify latency tracking per feature surfaces in the cost dashboard
+- Verify validation-retry logging (corrective-prompt loop traces present)
+- Verify `trace_id` audit linkage end-to-end (BFF request → `ai_usage` row → application log)
+- Depends on: Story 1.3 (shipped), Story 1.10.1 handover doc references this gate
+
+**Gate 5.3.2: GDPR Compliance Check** — _launch gate (Sprint 5 + Test & Polish)_
+- Mandatory GDPR requirements checklist (data residency, consent capture, right-to-erasure on `ai_usage`)
+- Verify PII detection in outputs (Task 1.2.4 content filter exercised on a representative prompt set)
+- Verify content filtering and redaction logging populates `ai_usage.content_filter_outcome`
+- Verify spend-cap enforcement under runaway conditions
+- Depends on: Story 1.3 + Task 1.2.4 (shipped), Story 1.10.1 handover doc references this gate
 
 ---
 
