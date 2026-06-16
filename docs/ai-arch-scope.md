@@ -26,6 +26,89 @@ This document extracts every deliverable from the strategy, reframed for the Swe
 
 ---
 
+## Handover Alignment — 2026-06-10 (updated 2026-06-16 for v2 brief)
+
+The Azure AI Foundry handover and the Brand Kit / Assets handoff clarify how the PR plan should be interpreted before starting Story 1.4. The v2 scope brief (`sweetspot-ai-deop-scope-brief-v2.docx`, 2026-06-16) locks four decisions captured in this section.
+
+### Provider scope — LOCKED
+
+**Azure AI Foundry is the launch provider.** Microsoft funds this engagement specifically to land sweetspot on Foundry; the substrate is built on Foundry from day one. Anthropic-direct remains as a **legacy adapter** for handover continuity and is removed post-launch (Anthropic removal trigger: Foundry sustained at 100% prod traffic with acceptable error rate for ≥30 days — exact threshold tracked separately).
+
+`Task 1.2.5: Azure AI Foundry Provider Adapter` is **launch-blocking** (not provider-readiness). Both `IAiClient` implementations (`AzureFoundryAiClient`, `AnthropicAiClient`) live in `src/backend/Core/AI/SSP.AI/Client/`; runtime selection is config-driven via `Ai:Provider`. **Code default** in `ServiceCollectionExtensions.NormalizeProvider` is `azure-foundry` (flipped 2026-06-16); `AnthropicAiClient` is marked `[Obsolete]` with file-scoped CS0618 suppressions at the sanctioned legacy registration and test sites.
+
+**Open deployment-config item (not code):** `appsettings.common.json` still pins `Ai:Provider="anthropic"` with `BaseUrl=https://api.anthropic.com` and Anthropic model IDs. Flipping `Ai:Provider` to `azure-foundry` in deployed environments requires a coordinated change to `Ai:BaseUrl` (Foundry endpoint), `Ai:Models` (Foundry deployment names), and the `Ai:ApiKey` Key Vault references in `appsettings.partial.{env}.json` (currently `AiAnthropicApiKey`). Tracked as a deployment/infrastructure task — not part of EPIC 1 code scope.
+
+### AI substrate ownership — LOCKED (Option A)
+
+**Option A: .NET native in SSP.** Confirmed per v2 brief §8.1 and the existing Sprint 1 implementation:
+
+- The AI substrate lives inside the Sweetspot .NET backend under `src/backend/Core/AI/SSP.AI/`.
+- Context loaders read tenant data through internal EF Core-backed services and repository conventions.
+- No external API contracts (e.g. `GET /brand/context`) are exposed for substrate consumption.
+
+Option B (Node microservice) is out of scope — kept as historical reference only.
+
+### Brand Kit consumption
+
+Brand Kit maps to the `brand` context block. The block must expose a typed context object with two responsibilities:
+
+- Prompt-facing tonal fields: `voice_description`, `tone_tags`, `values`, `one_liner`, and `exists`.
+- Renderer-facing visual fields: colors, fonts, logos, resolved color roles, `email_footer_html`, and template banners.
+
+`ToPromptString()` must include only the prompt-facing tonal fields. Visual fields are passed to deterministic renderers and template engines; they must not be dumped into the LLM prompt.
+
+**Ownership:** `brand_settings` table, EF Core migration, and write API endpoints are owned **end-to-end by Click engineering** (v2 brief §5.10). Deop consumes through the `IBrandKitReader` seam only — no Deop-side migration or write path for this table. Schema coordination conversation in week 2; until the schema lands, the reader returns null and the block degrades gracefully.
+
+### Assets consumption
+
+Assets are consumed as **pre-enriched metadata**, not raw prompt material. The enrichment flow is:
+
+`Upload → Blob Storage → Queue → Assets Processor → GPT-4o → DB metadata`
+
+The usable asset metadata is `ai_description`, `dominant_colors`, `suggested_use`, `tone`, and `is_analysed`. AI features may use selected enriched asset metadata as a tone/content reference, but semantic "find me the best asset" behavior is deferred until embeddings / pgvector are available.
+
+Image-only enrichment is in scope for this plan. Document, video, and audio enrichment are deferred unless a new explicit task is added.
+
+### AI surface parity — launch vs v1.1
+
+The v2 scope brief narrows Deop's launch deliverables to **three customer-shipping AI features**. Web Agent and the broader surface contracts move to v1.1.
+
+**Launch (in EPIC 1 / PR 9 + targeted hotfixes):**
+
+| Surface | Roadmap treatment |
+|---------|-------------------|
+| Email generation, refinement | PR 9 keystone path — `EmailGeneratePromptBuilder` + `EmailGenerateOutput` schema. |
+| Form generation | Deliverable 5.6 (v2 brief). Composes brand + org + industry; returns structured form JSON. |
+| Contact-field semantic tagging | Deliverable 5.7. Haiku-class classification + generation; returns `{description, tags[]}`. |
+
+**v1.1 / post-launch backlog (out of EPIC 1 scope):**
+
+| Surface | Status |
+|---------|--------|
+| Web Agent (website chatbot) | v1.1. Per v2 brief, Web Agent is the **only** product-facing agent type — no `form-agent`, `event-agent`, `strategy-agent`, `insights-agent`. |
+| Forms v2 generation, refinement, field mapping | v1.1 — moved from PR 12. |
+| Landing page generation, refinement, layout switching | v1.1 — moved from PR 12. |
+| Events Create-with-AI | v1.1 — moved from PR 12. |
+| Profile research | v1.1 backlog (onboarding accelerator). |
+| Insights ask, social generation, inbound classification | v1.1 backlog. |
+| Recommendation action handlers, Today page, Retain dashboard, command palette | v1.1 — entire EPIC 5 deferred. |
+| Methodology / Plan / Audience / Insights / Assets context blocks | v1.1 — only brand/org/industry/profile/event/brief/contact-fields/knowledge/field-semantics blocks (9 total per v2 brief §4.2) are in launch scope. |
+
+The roadmap language must not imply multiple product agent types.
+
+### Prototype loader mapping
+
+| Prototype loader | Sweetspot context target | Planning note |
+|------------------|--------------------------|---------------|
+| `loadBrandContext` | `BrandContext` | Split prompt tonal fields from renderer visual fields. |
+| `loadOrgContext` | `OrgContext` | Use Sweetspot account/org conventions; include compliance basics needed by generated content. |
+| `loadIndustryContext` | `IndustryContext` | Gracefully fall back to defaults when no industry config exists. |
+| `loadProfileContext` | `BrandContext` + future `KnowledgeContext` | Voice/profile facts must not be lost; decide exact split during prompt migration. |
+| `loadContactFieldsContext` | future `FieldSemanticsContext` | Field/tag/merge-token behavior belongs with PR 11p/PR 12 field semantics. |
+| `loadKnowledgeContext` | future `KnowledgeContext` | Generalise from chat-only to all eligible features in PR 12. |
+| asset library access | future `AssetsContext` | Load selected enriched metadata only; semantic search waits for embeddings. |
+| `industry-examples` | frontend/helper data | Not a core server-side AI context block unless later feature work proves it is needed. |
+
 ## Asset Shapes — Generation Categories (Reference)
 
 > From strategy §4.2 (L184-188). AI generation surfaces split into three output shapes with different brand-awareness requirements. Captured for completeness — the 7-PR sequence prioritises the branded-HTML shape (email) as the keystone.
@@ -53,6 +136,8 @@ All AI calls must flow through a central service. In the Sweetspot stack this be
 - [ ] **1.7** Content filtering: PII detection in outputs, banned-content checks, redaction logging. Baked in from day one. (L405)
 - [ ] **1.8** Provider-agnostic internal contract: cost translation, filtering, retry, validation all happen regardless of provider. (L631-632)
 - [ ] **1.9** Provider-specific cost tables: support per-provider pricing in the cost calculation service. (L649)
+- [ ] **1.10** Spend-cap enforcement: check per-account daily AI spend before provider invocation; blocked calls must not call the provider or incur cost.
+- [ ] **1.11** Persist structured content-filter outcomes to `ai_usage.content_filter_outcome`; schema-only support is not sufficient for launch compliance.
 
 ---
 
@@ -71,7 +156,7 @@ The context object exposes field accessors + a `ToPromptString()` method, so con
 
 | # | Block | Data Source | Line |
 |---|-------|-------------|------|
-| 2.4 | brand | `brand_settings` + `color_roles` JSONB | 164 |
+| 2.4 | brand | Brand Kit read contract (`brand_settings`, color roles, profile/voice fields, template banners) | 164 |
 | 2.5 | org | `organizations` table | 165 |
 | 2.6 | industry | `industry_template_configs` table | 166 |
 | 2.7 | methodology | `marketing_disciplines`, `goal_types`, `programmes`, `tag_labels` | 167 |
@@ -80,19 +165,25 @@ The context object exposes field accessors + a `ToPromptString()` method, so con
 | 2.10 | plan | `marketing_plans` + `plan_goals` + `plan_programmes` | 170 |
 | 2.11 | insights | Cross-org aggregate benchmarks (privacy-respecting) | 171 |
 | 2.12 | knowledge | KB tables — per-org + curated, vector search Top-K | 172 |
-| 2.13 | assets | `content_assets` table — AI-tagged on upload | 173 |
+| 2.13 | assets | `content_assets` enriched metadata (`ai_description`, `dominant_colors`, `suggested_use`, `tone`, `is_analysed`) | 173 |
 
 ### Feature → Block Composition
 
 | Feature | Blocks Composed | Line |
 |---------|----------------|------|
-| email-generate | brand + org + industry + audience + plan + assets + (optional) knowledge | 421 |
+| email-generate | brand + org + industry + audience + plan + selected enriched assets + (optional) knowledge | 421 |
 | journey-content | brand + org + industry + journey-context + audience + plan + assets | 422 |
 | form-generate | brand + org + industry | 423 |
-| chat agent | brand + org + industry + knowledge + conversation history | 424 |
-| strategy agent | brand + org + industry + methodology + plan + insights + knowledge | 425 |
-| insights-agent | org + industry + methodology + plan + insights + knowledge | 426 |
+| Web Agent | brand + org + industry + knowledge + conversation history | 424 |
+| strategy workflow | brand + org + industry + methodology + plan + insights + knowledge | 425 |
+| insights workflow | org + industry + methodology + plan + insights + knowledge | 426 |
 | recommendation action | all of the above + signal context + recommendation reasoning | 427 |
+
+### Brand and Assets Rules
+
+- [ ] **2.14** Brand visual fields are renderer inputs, not prompt text. `BrandContext.ToPromptString()` includes tonal fields only.
+- [ ] **2.15** Assets context contains selected enriched metadata only; do not load raw files, full libraries, or unanalysed assets into prompts.
+- [ ] **2.16** Semantic asset search is deferred until embeddings / pgvector exist. Until then, features may use explicit user-selected assets or simple metadata filters.
 
 ---
 
@@ -109,10 +200,11 @@ The context object exposes field accessors + a `ToPromptString()` method, so con
 
 ## 4. AGENT REDEFINITION
 
-- [ ] **4.1** "Agent" = multi-step, conversational, decision-making entity. Single-call email senders are handlers/generators, not agents. (L201)
+- [ ] **4.1** "Agent" = customer-visible Web Agent: multi-step, conversational, decision-making website/chat experience. Single-call email senders, form generators, event generators, strategy workflows, and insights workflows are handlers/generators/workflows, not product agent types. (L201)
 - [ ] **4.2** Form-agent and event-agent **creation** logic (confirmation email) moves to journeys. Journey's first step = confirmation email. .ics attachment becomes a journey-email feature. (L205)
-- [ ] **4.3** Agent **runtime** remains: handles inbound replies, multi-turn, with original registration context. (L207)
+- [ ] **4.3** Runtime conversation handling, where needed, routes through the Web Agent / inbox conversation model rather than separate Form Agent or Event Agent product surfaces. (L207)
 - [ ] **4.4** HTML generation duplication (email-generate / form-agent / event-agent) disappears. (L209)
+- [ ] **4.5** After PR 11, no customer-facing Form Agent or Event Agent remains. The only named product agent type is Web Agent unless product explicitly approves another.
 
 ---
 
@@ -128,7 +220,8 @@ AI layer (to be mapped to .NET):
   Prompts/       — Per-feature system prompts (resource files or prompt classes)
   Context/       — 10 composable context block services
   Knowledge/     — KB / RAG layer (vector search, embedding)
-  Agents/        — Multi-step agent loops (chat, strategy)
+  WebAgent/      — Website/chat agent turn handling
+  Workflows/     — Strategy, insights, event, landing, and form AI workflows/generators
   Schemas/       — Output validation schemas (C# record types or FluentValidation)
   Usage/
     Log          — Writes to ai_usage after every call
@@ -228,7 +321,7 @@ AI layer (to be mapped to .NET):
 ## 14. INFRASTRUCTURE — Forward Look
 
 - [ ] **14.1** Launch on Anthropic direct API. (L653)
-- [ ] **14.2** Post-launch: migrate to Azure AI Foundry (v1.5 PR). (L653)
+- [ ] **14.2** Azure AI Foundry provider adapter is tracked explicitly in Task 1.2.5. It remains provider-readiness/post-launch unless Deop or Click Engineering confirms Foundry is a launch dependency. (L653)
 - [ ] **14.3** Environment variables for provider selection: `AI_PROVIDER`, `AI_REGION`, `AI_MODEL_DEFAULT` — config-driven, not hardcoded. (L635)
 - [ ] **14.4** `data_residency_region` column logged from day one. (L637)
 
@@ -240,11 +333,11 @@ AI layer (to be mapped to .NET):
 
 | PR | Name | Scope | Customer-visible? | Line |
 |----|------|-------|-------------------|------|
-| PR 9 | Foundation + email-generate proof | AI client wrapper service (full — retry, model selection, output validation, content filtering, cost calc), usage logging, context blocks (brand, org, industry). Migrate email-generate as byte-identical proof of pattern. Extend ai_usage schema. Seed system/template field tags. | No | 459 |
+| PR 9 | Foundation + email-generate proof | AI client wrapper service (full — retry, model selection, output validation, content filtering, cost calc), usage logging, spend-cap enforcement, persisted content-filter outcomes, context blocks (brand, org, industry). Migrate email-generate as byte-identical proof of pattern. Extend ai_usage schema. Seed system/template field tags. | No | 459 |
 | PR 10 | Unified email-content component | Extract email generation UI to shared component. Refactor context contract. Build unified backend endpoint. Wire into journey editor. Context-aware CTA. | Yes — journey emails AI-generated | 460 |
-| PR 11 | Form/event agent migration | Agents stop sending confirmation emails → journeys take over. Agents narrow to "enrol in journey + open inbound thread". HTML duplication gone. | Partial | 461 |
+| PR 11 | Web Agent cleanup + form/event confirmation migration | Form/event confirmation senders stop being treated as agents → journeys take over. Runtime conversation handling routes through Web Agent / inbox conversation model. HTML duplication gone. | Partial | 461 |
 | PR 11p | Field-tagging UI | Settings page for tagging contact fields with semantic labels. System fields read-only, template fields read-only, custom fields interactive + AI suggestion. Readiness %. | Yes | 462 |
-| PR 12 | Context blocks (methodology, plan, insights, audience, assets) | Build remaining 7 context block services. Knowledge block generalised from chat-only to all features. | No — substrate | 463 |
+| PR 12 | Context blocks + AI surface parity wiring | Build remaining 7 context block services. Knowledge block generalised from Web Agent-only to all eligible features. Add explicit surface wiring tasks for Forms v2, field mapping, landing pages, Events Create-with-AI, Web Agent, profile research, insights/social/inbound classification, and feature-key registry. | No — substrate | 463 |
 | PR 13 | Recommendation action handlers | "Build the campaign" action creates real audiences, real journeys with AI content. Phase 2 live. Segment-level hyperpersonalisation. | Yes — Phase 2 | 464 |
 | PR 14 | Today page + Retain dashboard + command palette | Insights revamp customer-facing surfaces. | Yes — launch-ready | 465 |
 
@@ -252,7 +345,7 @@ AI layer (to be mapped to .NET):
 
 ```
 PR 9 ──→ everything
-PR 10 ──→ PR 11 (agent migration), PR 13 (action handlers)
+PR 10 ──→ PR 11 (Web Agent cleanup + confirmation handler migration), PR 13 (action handlers)
 PR 11p ──→ field-semantics block, audience block, Phase 2 depth
 PR 12 ──→ PR 13 (rich contextual AI content)
 PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
@@ -286,8 +379,8 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 
 ### Brand & Content
 - [ ] **Q5** Per-template brand-role override: on campaign_emails or template? Recommendation: defer to v2. (L687)
-- [ ] **Q6** Chat brand strategy: system message only or re-injected per turn? Recommendation: system message only. (L689)
-- [ ] **Q7** Agent brand depth: full block or thin slice? Recommendation: full block by default. (L691)
+- [ ] **Q6** Web Agent brand strategy: system message only or re-injected per turn? Recommendation: system message only. (L689)
+- [x] **Q7** Product agent taxonomy: **RESOLVED — Web Agent only.** Form/event/strategy/insights are handlers, generators, or workflows unless product explicitly approves a new customer-facing agent type. Web Agent gets the full brand block by default; dial back per-agent if over-styling emerges. (L691)
 
 ### Data & Context
 - [ ] **Q8** Tag vocabulary expansion for B2B/non_profit/wealth_management: global or per-vertical? Product decision. (L697)
@@ -296,13 +389,14 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 - [ ] **Q11** Curated knowledge content sourcing: internal, partner, AI+human review? Product decision. (L703)
 - [ ] **Q12** KB retrieval: always-on or selective? Recommendation: always-on, then optimise. (L705)
 - [ ] **Q13** Asset auto-suggestion: auto-propose or user-invoked? Recommendation: auto-suggest in Phase 2. (L707)
-- [ ] **Q14** Non-image asset AI analysis (PDF, video, audio): v2 conversation. (L709)
+- [x] **Q14** Non-image asset AI analysis (PDF, video, audio): **RESOLVED — deferred.** Phase 1 assumes image-only enrichment output (`ai_description`, `dominant_colors`, `suggested_use`, `tone`, `is_analysed`). Document, video, and audio enrichment require a new explicit task. (L709)
 
 ### Compliance & Infrastructure
 - [ ] **Q15** SOC 2 readiness timeline: target audit window? (L713)
 - [ ] **Q16** EU AI Act risk classification: confirm with legal review pre-launch. (L715)
 - [ ] **Q17** Data residency at launch: do early customers require EU-region? If yes → Azure AI Foundry becomes launch dependency. (L717)
-- [ ] **Q18** Cost controls: per-org daily spend cap, per-feature concurrency limit, alerting threshold. Easy now, painful later. (L719)
+- [ ] **Q18** Cost controls: per-org daily spend cap is now PR 9 follow-up scope; per-feature concurrency limit and alerting threshold remain open. (L719)
+- [ ] **Q19** Deop consumption mode: Phase 1 assumes in-process .NET context loaders (Option A). If Deop requires a Node microservice (Option B), define `GET /brand/context` and enriched asset API contracts before implementation.
 
 ---
 
@@ -310,10 +404,10 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 
 | Category | Item Count |
 |----------|-----------|
-| Client wrapper requirements | 9 |
-| Context block requirements | 13 + rules |
+| Client wrapper requirements | 11 |
+| Context block requirements | 16 + rules |
 | Unified email component | 6 |
-| Agent redefinition | 4 |
+| Agent redefinition | 5 |
 | Library structure | 1 |
 | Schema changes | 6 |
 | Multi-tenant isolation | 5 |
@@ -326,7 +420,7 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 | Infrastructure | 4 |
 | Migration PRs | 7 |
 | Risks | 5 |
-| Open questions | 18 |
+| Open questions | 19 |
 
 ---
 ---
@@ -350,7 +444,7 @@ Sprints 1–4 are 2 weeks each (10 working days). **Sprint 5 is compressed to 1 
 ### Dependency Chain
 ```
 PR 9 ──→ everything
-PR 10 ──→ PR 11 (agent migration), PR 13 (action handlers)
+PR 10 ──→ PR 11 (Web Agent cleanup + confirmation handler migration), PR 13 (action handlers)
 PR 11p ──→ field-semantics block, audience block, Phase 2 depth
 PR 12 ──→ PR 13 (rich contextual AI content)
 PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
@@ -362,9 +456,10 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 |--------|-------------|-----------|-----|-------|
 | Sprint 1 | 2026-06-01 | 2026-06-12 | PR 9 | Foundation + Client Wrapper |
 | Sprint 2 | 2026-06-15 | 2026-06-26 | PR 10 | Unified Email Component |
-| Sprint 3 | 2026-06-29 | 2026-07-10 | PR 11 + PR 11p | Agent Migration + Field-Tagging UI |
-| Sprint 4 | 2026-07-13 | 2026-07-24 | PR 12 | Remaining Context Blocks |
-| Sprint 5 | 2026-07-27 | 2026-08-01 | PR 13 + PR 14 | Recommendation Actions + Today Page (compressed) |
+| Sprint 3 | 2026-06-29 | 2026-07-10 | PR 11 + PR 11p | Web Agent Cleanup + Field-Tagging UI _(PR 11 Web Agent scope → v1.1; field-tagging stays at launch)_ |
+| Sprint 4 | 2026-07-13 | 2026-07-24 | PR 12 | Context Blocks + Surface Parity Wiring _(**v1.1 per v2 brief** — out of launch scope; remaining context blocks deferred to v1.1)_ |
+| Sprint 5 | 2026-07-27 | 2026-08-01 | PR 13 + PR 14 | Recommendation Actions + Today Page _(**v1.1 per v2 brief** — entire EPIC 5 deferred)_ |
+| §5.10 Hotfix | parallel with Sprints 2-3 | — | Story 1.8 hotfix PR series | Capture-surface data layer (org/profile/KB + industry templates) per v2 brief §5.10 |
 | Test & Polish | 2026-08-03 | 2026-08-15 | — | QA, regression fixes, polish — no new feature code |
 
 ### Decision Checkpoints
@@ -379,10 +474,11 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 
 ### Story 1.1: Create AI Project Structure
 > Set up the AI layer skeleton within the .NET backend.
+> _Status: complete — `src/backend/Core/AI/SSP.AI/` with Client/, Context/, Prompts/, Schemas/, Usage/, Tenancy/, Agents/ folders + `AddAiServices()` DI registration._
 
 **Task 1.1.1: Create AI Domain Project**
 - Subtask: Create `AI/` namespace structure under `src/backend/Core/`
-- Subtask: Set up folder structure: `Client/`, `Prompts/`, `Context/`, `Knowledge/`, `Agents/`, `Schemas/`, `Usage/`
+- Subtask: Set up folder structure: `Client/`, `Prompts/`, `Context/`, `Knowledge/`, `WebAgent/`, `Workflows/`, `Schemas/`, `Usage/`
 - Subtask: Create DI registration classes (`AddAiServices()`)
 - Depends on: —
 
@@ -394,6 +490,7 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 
 ### Story 1.2: Client Wrapper Service (IAiClient)
 > Central service through which all AI calls flow.
+> _Status: complete — `IAiClient`, `AnthropicAiClient` (legacy), `AzureFoundryAiClient` (launch default), Polly retry, FluentValidation, content filtering, spend-cap, usage logging all wired via `AiClientBase` pipeline._
 
 **Task 1.2.1: IAiClient Interface & Implementation**
 - Subtask: Define `IAiClient` interface: `Generate({ feature, system, messages, modelClass })` → `{ content, usage, metadata }`
@@ -420,8 +517,18 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 - Subtask: Customer-configurable thresholds
 - Depends on: 1.2.1
 
+**Task 1.2.5: Azure AI Foundry Provider Adapter** _(launch-blocking, complete — `AzureFoundryAiClient` shipped)_
+- Subtask: Implement Azure AI Foundry adapter behind `IAiClient` without changing feature callers
+- Subtask: Map model classes (`generation`, `classification`, `reasoning`) to Foundry deployment names
+- Subtask: Update provider-specific pricing/cost tables for Foundry deployments
+- Subtask: Verify usage logging, spend caps, content filtering, validation retries, and graceful fallback still work through the adapter
+- Subtask: Add side-by-side quality tests for Anthropic direct vs Foundry output on representative prompts
+- Subtask: Flip default provider to `azure-foundry` in `ServiceCollectionExtensions.NormalizeProvider` so launch deployments hit Foundry without env override
+- Depends on: 1.2.1, 1.3.2, 1.3.3
+
 ### Story 1.3: Usage Logging & Cost Tracking
 > Mandatory logging on every AI call.
+> _Status: complete — `ai_usage` migration `20260608155642_AddAiUsageTable.cs` (14 columns + composite indices), `AiUsageLogger`, `DailyAiSpendCapEnforcer` pre-call, `Account.DailyAiSpendCapUsd` column (migration `20260611112835`)._
 
 **Task 1.3.1: ai_usage Schema Migration**
 - Subtask: Create EF Core migration: add new columns to `ai_usage` table
@@ -437,30 +544,56 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 - Subtask: `trace_id` audit linkage
 - Depends on: 1.3.1, 1.2.1
 
+**Task 1.3.3: Spend Cap Enforcement**
+- Subtask: Add a pre-provider spend-cap check in the AI client pipeline
+- Subtask: Support per-account daily cap and a default configured cap
+- Subtask: Calculate current-day spend from `ssp.ai_usage` before provider invocation
+- Subtask: Return a typed AI client error when capped
+- Subtask: Add tests proving capped calls do not invoke the provider
+- Depends on: 1.3.2, 1.2.1
+
+**Task 1.3.4: Persist Content Filter Outcome**
+- Subtask: Extend the content-filter contract to return structured outcome metadata
+- Subtask: Persist PII categories, banned-term categories/severities, action taken, and direction to `ai_usage.content_filter_outcome`
+- Subtask: Ensure sensitive matched substrings are never logged or persisted
+- Subtask: Add tests for redacted output and rejected input/output paths
+- Depends on: 1.3.2, 1.2.4
+
 ### Story 1.4: First 3 Context Blocks (brand, org, industry)
 > Minimal context blocks needed for email-generate proof.
+> _Status: complete — `IContextBlock<T>` base, `BrandContextBlock` (reads via `IBrandKitReader` seam; null until Click's `brand_settings` lands), `OrgContextBlock` (reads `Account`), `IndustryContextBlock` (deterministic defaults until Story 1.8.5 ships `industry_template_configs`). Tonal-only `ToPromptString()`._
 
 **Task 1.4.1: Context Block Base**
-- Subtask: `IContextBlock<T>` interface: `LoadBlockContextAsync(orgId, options?)` → structured context object
+- Subtask: `IContextBlock<T>` interface: `LoadBlockContextAsync(accountId, options?)` → structured context object
 - Subtask: `ToPromptString()` method on context objects
 - Subtask: Graceful degradation: missing/sparse data → empty stub, never throw
+- Subtask: Define a shared `Exists` / empty-context convention for all AI context objects
+- Subtask: Document the prototype-loader-to-Sweetspot-context mapping from the handover alignment section
 - Depends on: 1.1.1
 
 **Task 1.4.2: Brand Context Block**
-- Subtask: Load brand info from `brand_settings` + `color_roles` JSONB
-- Subtask: Brand tonality, voice, visual identity access
+- Subtask: Load Brand Kit through the internal Phase 1 read path (EF Core-backed service under Option A)
+- Subtask: Return typed prompt-facing fields: `voice_description`, `tone_tags`, `values`, `one_liner`, `exists`
+- Subtask: Return typed renderer-facing fields: colors, fonts, logos, resolved roles, `email_footer_html`, `template_banners`
+- Subtask: Ensure `ToPromptString()` includes tonal fields only and excludes colors, fonts, logos, and raw visual data
+- Subtask: Gracefully return `exists = false` / empty tonal context when Brand Kit is missing
 - Depends on: 1.4.1
 
 **Task 1.4.3: Org Context Block**
-- Subtask: Load org info from `organizations` table
+- Subtask: Load Sweetspot account/org identity through existing tenant conventions
+- Subtask: Include industry key/template, organisation name, compliance/footer basics, and privacy/contact fields required by generated content
+- Subtask: Gracefully fall back when optional org/profile fields are missing
 - Depends on: 1.4.1
 
 **Task 1.4.4: Industry Context Block**
 - Subtask: Load industry info from `industry_template_configs` table
+- Subtask: Include industry vocabulary, recurring-value labels, examples only when server-side consumers need them
+- Subtask: Return deterministic defaults when no industry config exists
 - Depends on: 1.4.1
 
 ### Story 1.5: Email-Generate Proof of Pattern
 > Run existing email-generate through the new architecture with byte-identical output.
+> _Status: complete on branch `deop/feature/email-generate-migration` — `EmailGeneratePromptBuilder`, `EmailGenerateOutput` + `EmailGenerateOutputValidator` registered under feature key `"email-generate"`. System/template field tags seeded (migration `20260615131227`)._
 
 **Task 1.5.1: Email-Generate Migration**
 - Subtask: Analyze existing email-generate endpoint
@@ -475,6 +608,7 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 
 ### Story 1.6: Multi-Tenant Isolation (AI Layer)
 > Tenant isolation for AI tables.
+> _Status: complete — `Tenancy/` layer (`ITenantAiClient`, `TenantContextBlockLoader`, `DefaultTenantAiContext`) wraps `AccountId` injection per request; all context blocks reject `Guid.Empty`._
 
 **Task 1.6.1: Tenant Scoping**
 - Subtask: `org_id` scope enforcement on all AI tables
@@ -484,6 +618,7 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 
 ### Story 1.7: Prompt Management
 > Prompts stored in dedicated files/classes, not inline.
+> _Status: complete — `IPromptBuilder` base, per-feature prompt builder classes under `SSP.AI/Prompts/<feature>/`._
 
 **Task 1.7.1: Prompt Storage**
 - Subtask: Per-feature system prompt classes in `Prompts/`
@@ -491,9 +626,66 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 - Depends on: 1.1.1
 
 === PR 9: Foundation + Email-Generate Proof ===
-> **Scope:** AI client wrapper (full — retry, model selection, output validation, content filtering, cost calculation), usage logging, 3 context blocks (brand/org/industry), email-generate proof, ai_usage schema, system/template field tag seed, multi-tenant isolation, prompt management.
+> **Scope:** AI client wrapper (full — retry, model selection, output validation, content filtering, cost calculation), usage logging, spend-cap enforcement, persisted content-filter outcomes, 3 context blocks (brand/org/industry), email-generate proof, ai_usage schema, system/template field tag seed, multi-tenant isolation, prompt management.
 > **Customer-visible:** No
 > **Review:** End of Sprint 1 (Jun 13)
+
+---
+
+### Story 1.8: §5.10 Capture-Surface Data Layer (Hotfix Track)
+> Added per v2 scope brief §5.10. Deop-owned table schemas, EF Core entities, migrations, and multi-tenant write API endpoints for three of the four capture surfaces. Brand kit excluded — Click engineering owns end-to-end. Industry templates owned by Deop because Account FK depends on them.
+>
+> Ships as a series of hotfix PRs in parallel with Sprints 2-3, ahead of the data needs of Sprint 2's unified email component.
+
+**Task 1.8.5: `industry_template_configs` Table + Seed** _(prerequisite — FK target)_ — **shipped** (migration `20260616122221_AddIndustryTemplateConfigs`)
+- Subtask: Add EF Core entity `IndustryTemplateConfig` (`industry_key` PK, `display_name`, `vocabulary`, `recurring_value_labels`)
+- Subtask: Migration adds the table to the Tenant DbContext under the reference-tables group (single-DB join keeps the reader simple — Tenant chosen over Control)
+- Subtask: Seed launch industry `membership` plus three starter rows (`b2b`, `nonprofit`, `wealth-management`) via `IndustryTemplateConfigSeedData`
+- Subtask: `EfCoreIndustryConfigReader` joins on the seeded table; falls back to `IndustryConfigData.KeyOnly` for industries not yet curated
+- Subtask: `IndustryContextBlock` contract unchanged — only the reader body changes
+- Depends on: —
+
+**Task 1.8.1: `Account` Schema Gap-Audit + Hotfix Migration** — **data layer shipped** (migration `20260616122749_AddAccountOrganisationSetupFields`); BFF endpoint deferred follow-up
+- Subtask: Verified existing columns on `Account` (Tenant DbContext entity): `Industry` (free-text), `Subindustry`, `Revenue`, `EmployeeCount`, `AddressLine1/2`, `City`, `CountryCode`, `RegionId`, `DailyAiSpendCapUsd`
+- Subtask: Added missing columns (all nullable for safe production rollout): `IndustryTemplateId` (FK → `industry_template_config.industry_key`, Restrict cascade), `PrivacyUrl`, `Website`, `PostalCode`, `State`, `Timezone`, `Locale`
+- Subtask: Backfill plan — populate `IndustryTemplateId` from existing `Industry` free-text via mapping table seeded in Task 1.8.5; deprecate free-text column post-backfill (follow-up hotfix)
+- Subtask: `OrgContext` exposes the new tonal fields; `OrgContextBlock` reads `IndustryTemplateId ?? Industry` so the canonical key supersedes the legacy column
+- Subtask: BFF write endpoint (`Core/BackendForFrontend/`) for org-setup save — **deferred** to a follow-up commit (BFF → Admin API client → Admin controller pipeline scope)
+- Depends on: 1.8.5
+
+**Task 1.8.2: `organisation_profile` + `voice_samples` Tables + Endpoints** — **data layer + reader seam shipped** (migration `20260616124103_AddOrganisationProfileTables`); BFF endpoints deferred follow-up
+- Subtask: EF Core entities `OrganisationProfile` (audience description, tier/programme names, terminology preferences) and `VoiceSample` (up to 5 samples per profile, max 8000 chars per sample)
+- Subtask: Migration adds both tables with `AccountId` FK Restrict + unique `(account_id)` on profile and composite `(account_id, organisation_profile_id)` on samples; voice_sample cascades on its profile
+- Subtask: `IOrganisationProfileReader` + `EfCoreOrganisationProfileReader` seam caps surfaced samples at `OrganisationProfileData.MaxVoiceSamples` (5) ordered by `CreatedAt` descending
+- Subtask: BFF write endpoints — **deferred** to a follow-up commit alongside Click's Angular UI work
+- Subtask: Voice-sample truncation rule (8000-char max) enforced server-side (entity validation + DB column constraint)
+- Depends on: 1.8.1
+
+**Task 1.8.3: `kb_documents` + `kb_chunks` Tables + Foundry Embeddings** — **data layer + embedding adapter shipped** (migration `20260616124826_AddKnowledgeBaseTables`); BFF endpoints + HNSW index deferred follow-up
+- Subtask: docker-compose postgres image swapped to `pgvector/pgvector:pg16` (tmpfs reset noted in commit body)
+- Subtask: Migration enables `CREATE EXTENSION IF NOT EXISTS vector`, creates `kb_document` (id, AccountId FK Restrict, source_blob_url, source_uri, mime_type, title, ingest_status, ingest_error, token_count_total) and `kb_chunk` (id, AccountId, document_id FK Cascade, chunk_index, chunk_text, `embedding vector(3072)`, token_count) + composite indices
+- Subtask: HNSW index on `kb_chunks.embedding` — **deferred**: stock pgvector caps HNSW at ~2000 dims on the `vector` type; addition follows once dimension reduction (request `dimensions=1536` from Foundry) or pgvector 0.7+ halfvec lands. Sequential scan acceptable for launch-volume KBs.
+- Subtask: Tenant scope enforced at the workflow layer (Tenant DbContext does not use `.HasQueryFilter()`; this matches the existing convention)
+- Subtask: `IEmbeddingClient` + `AzureFoundryEmbeddingClient` (HTTP transport mirroring chat pattern) using `text-embedding-3-large` (3072-dim); batches caller input into `Ai:Embeddings:BatchSize`-sized requests and preserves absolute order via per-item `index`
+- Subtask: BFF endpoints — **deferred** to a follow-up commit (KB upload + ingest workflow + similarity search)
+- Subtask: Throttle / retry strategy wrapped at the call site via existing `IAiRetryPolicy` (Polly) — landed via DI in the embedding client adapter
+- Drive-by: `TenantDbContext.OnModelCreating` ignores `KbChunk.Embedding` under the EF in-memory provider so context-block unit tests still exercise the DbContext (InMemory cannot map the `Pgvector.Vector` CLR type)
+- Depends on: 1.8.1
+
+**Task 1.8.4: `brand_settings` Coordination (read-only for Deop)** — _pending Click engineering schema delivery_
+- Subtask: Week-2 schema scoping conversation with Click engineering (per v2 brief §5.10)
+- Subtask: Verify `IBrandKitReader` contract and `BrandKitData` shape match the schema Click ships
+- Subtask: Once Click migration lands, swap `EfCoreBrandKitReader` from null-return to real EF query — only the reader body changes; block and context stay stable
+- Subtask: **Do not write a Deop-side migration for `brand_settings`** — Click owns it end-to-end
+- Depends on: Click ships the schema
+
+=== PR-Hotfix series for Story 1.8 ===
+> **Scope:** v2 scope-brief §5.10 capture-surface data layer. Five capture-surface tasks shipped as independent hotfix PRs in parallel with Sprints 2-3.
+> **Order:** 1.8.5 (FK target) → 1.8.1 (Account hotfix) → 1.8.2 (profile) → 1.8.3 (KB). 1.8.4 coordination parallel.
+> **Customer-visible:** No (data layer only; UI work belongs to Click).
+> **Review:** Per PR.
+>
+> **Status (2026-06-16):** 1.8.5 + 1.8.1 + 1.8.2 + 1.8.3 data layers shipped on `deop/feature/section-5.10-capture-data-layer` (commits `165e533e8`, `1b02bdded`, `7f4106bad`, `77df28121`). BFF write endpoints for org-setup / profile / voice-samples / KB upload and HNSW similarity index for `kb_chunk.embedding` deferred to follow-up commits. 1.8.4 awaits Click brand_settings schema delivery.
 
 ---
 
@@ -543,31 +735,33 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 
 ---
 
-## EPIC 3: Agent Migration & Field-Tagging UI
+## EPIC 3: Web Agent Cleanup & Field-Tagging UI
 **Sprint 3 (Jun 30 – Jul 11)**
 
-### Story 3.1: Form/Event Agent Migration
-> Agents stop sending confirmation emails → journeys take over.
+### Story 3.1: Form/Event Confirmation Handler Migration
+> Form/event confirmation senders stop being treated as agents → journeys take over. Web Agent remains the only customer-facing product agent type.
 
-**Task 3.1.1: Agent Redefinition**
-- Subtask: Apply "Agent" = multi-step, conversational, decision-making entity definition
-- Subtask: Reclassify single-call email senders as handlers/generators
+**Task 3.1.1: Product Agent Definition (Web Agent Only)**
+- Subtask: Apply "Agent" = Web Agent: customer-facing multi-turn website/chat experience
+- Subtask: Reclassify single-call email senders, form generators, event generators, strategy workflows, and insights workflows as handlers/generators/workflows
+- Subtask: Update user-facing labels and internal planning language so Form Agent and Event Agent are not treated as product agent types
 - Depends on: PR 10
 
 **Task 3.1.2: Confirmation Email → Journey Migration**
-- Subtask: Move form-agent and event-agent creation logic to journeys
+- Subtask: Move form-submission and event-registration confirmation email creation logic to journeys
 - Subtask: Journey's first step = confirmation email
 - Subtask: Implement .ics attachment as journey-email feature
 - Depends on: 3.1.1
 
-**Task 3.1.3: Agent Runtime Narrowing**
-- Subtask: Narrow agent runtime: inbound reply handling, multi-turn, registration context only
-- Subtask: Remove HTML generation duplication (email-generate / form-agent / event-agent)
-- Subtask: Simplify agents to "enrol in journey + open inbound thread"
+**Task 3.1.3: Web Agent / Inbox Runtime Narrowing**
+- Subtask: Remove separate Form Agent and Event Agent runtime surfaces
+- Subtask: Route any needed inbound conversation handling through the Web Agent / inbox conversation model with original registration context
+- Subtask: Remove HTML generation duplication (email-generate / form confirmation / event confirmation)
+- Subtask: Simplify legacy form/event triggers to "enrol in journey + open conversation thread when needed"
 - Depends on: 3.1.2
 
-=== PR 11: Form/Event Agent Migration ===
-> **Scope:** Agents stop sending confirmation emails, journeys take over. Agent runtime narrowed. HTML duplication removed.
+=== PR 11: Web Agent Cleanup + Form/Event Confirmation Migration ===
+> **Scope:** Form/event confirmation senders stop being treated as agents, journeys take over, Web Agent remains the only product agent type, HTML duplication removed.
 > **Customer-visible:** Partial (agent behavior change)
 > **Review:** Mid-Sprint 3 (Jul 7)
 
@@ -599,7 +793,7 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 
 ---
 
-## EPIC 4: Remaining Context Blocks
+## EPIC 4: Context Blocks + AI Surface Parity Wiring
 **Sprint 4 (Jul 14 – Jul 25)**
 
 ### Story 4.1: Methodology & Plan Context Blocks
@@ -639,27 +833,86 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 - Subtask: KB tables — per-org + curated content
 - Subtask: Vector search Top-K, filter by `org_id`
 - Subtask: Scope enforcement in retrieval function, not caller
-- Subtask: Generalize knowledge block from chat-only to all features
+- Subtask: Generalize knowledge block from Web Agent-only to all eligible features
 - Depends on: PR 9
 
 ### Story 4.4: Assets Context Block
 > Include content assets in AI context.
 
 **Task 4.4.1: Assets Context Block**
-- Subtask: Load AI-tagged assets from `content_assets` table
-- Subtask: Include asset metadata + tag info in context
+- Subtask: Load enriched asset metadata from `content_assets` table
+- Subtask: Include only selected analysed metadata: `ai_description`, `dominant_colors`, `suggested_use`, `tone`, `is_analysed`
+- Subtask: Exclude raw files, full libraries, and unanalysed assets from prompts
+- Subtask: Document that semantic asset search waits for embeddings / pgvector
 - Depends on: PR 9
 
 ### Story 4.5: Feature → Block Composition Wiring
 > Implement which blocks compose for each feature.
 
 **Task 4.5.1: Composition Registry**
-- Subtask: Feature → blocks mapping registry (email-generate, journey-content, form-generate, chat, strategy, insights, recommendation)
+- Subtask: Feature → blocks mapping registry (email-generate, journey-content, form-generate, Web Agent, strategy workflow, insights workflow, recommendation)
 - Subtask: Dynamic block loading based on feature configuration
 - Depends on: 4.1.1, 4.1.2, 4.2.2, 4.3.1, 4.3.2, 4.4.1
 
-=== PR 12: Context Blocks (methodology, plan, insights, audience, assets, knowledge, field-semantics) ===
-> **Scope:** Remaining 7 context block services. Knowledge block generalized from chat-only to all features. Feature → block composition registry.
+### Story 4.6: Prototype AI Surface Parity Wiring
+> Make every AI surface from the Deop handover visible in the roadmap. These tasks define prompt/schema/context contracts and decide launch vs post-launch implementation per surface.
+
+**Task 4.6.1: Forms v2 Generation + Refinement Wiring**
+- Subtask: Port the Forms v2 generate/refine prompt contracts into .NET prompt classes
+- Subtask: Use brand + org + industry + profile + contact field context
+- Subtask: Validate against a typed `GeneratedFormDefinition` contract
+- Subtask: Define feature keys for form generation and refinement; do not leave Forms v2 on a legacy usage shim
+- Subtask: Confirm this is a structural JSON generator, not an agent
+- Depends on: 4.5.1, 4.2.1
+
+**Task 4.6.2: Forms v2 Field Mapping Wiring**
+- Subtask: Preserve exact-match and synonym mapping before the AI call
+- Subtask: Use AI only for unresolved captured-form fields
+- Subtask: Return `map_existing`, `create_new`, or `dont_capture` with confidence per field
+- Subtask: Batch unmapped fields into one classification call
+- Subtask: Define the `forms_v2_field_mapping` feature key and model class
+- Depends on: 4.2.1
+
+**Task 4.6.3: Landing Page Generation, Refinement, and Layout Switching Wiring**
+- Subtask: Port landing-page generate/refine/fill-missing-block prompt contracts
+- Subtask: Use relaxed generation schemas and server-stamped IDs for page blocks
+- Subtask: Preserve the rule that AI does not emit URLs, page block IDs, or image asset IDs
+- Subtask: Preserve layout-switch "missing blocks only" behavior and bag-of-blocks storage model
+- Subtask: Define feature keys for generation, refinement, and layout switch
+- Depends on: 4.5.1, 4.4.1
+
+**Task 4.6.4: Events Create-with-AI Surface Contract**
+- Subtask: Define event field extraction contract with nullable operational basics and marketing brief fields
+- Subtask: Define event journey structure contract for Invitations, Confirm, and Followup journeys
+- Subtask: Preserve `cta_intent` indirection so AI never emits raw URLs
+- Subtask: Preserve slot-based scaffold rendering for event invitations and HTML rendering for followups
+- Subtask: Define feature keys for event extraction, journey structure, invite content, followup content, and regeneration
+- Depends on: PR 10, 4.5.1
+
+**Task 4.6.5: Web Agent Context and Knowledge Wiring**
+- Subtask: Rename customer-facing chat agent references to Web Agent
+- Subtask: Compose brand + org + industry + knowledge + conversation history
+- Subtask: Preserve response-length configuration and fallback-message behavior
+- Subtask: Confirm Web Agent is the only customer-facing product agent type
+- Depends on: 4.3.2, 4.5.1
+
+**Task 4.6.6: Profile Research, Insights Ask, Social Generate, and Inbound Classification Contracts**
+- Subtask: Document profile research as an onboarding extraction workflow with nullable per-field outputs
+- Subtask: Document insights ask as org-data Q&A with tenant-scoped context and traceable usage
+- Subtask: Document social generation as a content-generation workflow using the shared voice floor
+- Subtask: Document inbound classification as a classification workflow with explicit feature key and model class
+- Subtask: Mark each workflow as launch, post-launch, or explicit product deferral before PR 13 starts
+- Depends on: 4.5.1
+
+**Task 4.6.7: AI Feature Key and Invariant Registry**
+- Subtask: Create a single registry of feature keys, model classes, prompt class, schema contract, context composition, and launch/deferred status for every AI surface
+- Subtask: Include the handover invariants: every call logs usage, spend cap before provider call, voice floor on content prompts, dash stripping on text output, schema validation, server-stamped IDs, no AI-emitted URLs, graceful failure, org/account scope on every call
+- Subtask: Add Forms v2 feature keys that are TBD in the handover
+- Subtask: Use the registry as the PR 13 readiness gate
+- Depends on: 4.6.1, 4.6.2, 4.6.3, 4.6.4, 4.6.5, 4.6.6
+
+=== PR 12: Context Blocks + AI Surface Parity Wiring ===
+> **Scope:** Remaining 7 context block services. Knowledge block generalized from Web Agent-only to all eligible features. Feature → block composition registry. Explicit surface contracts for Forms v2, field mapping, landing pages, Events Create-with-AI, Web Agent, profile research, insights/social/inbound classification, and feature-key/invariant registry.
 > **Customer-visible:** No — substrate/infrastructure.
 > **Review:** End of Sprint 4 (Jul 25)
 > **🔴 Decision Checkpoint (Week 8):** Has the field-tagging UI shipped and are users tagging?
@@ -754,15 +1007,15 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 |--------|-------|----|------|-------------------|
 | Sprint 1 | Jun 1–13 | PR 9 | Foundation & Client Wrapper | ❌ |
 | Sprint 2 | Jun 16–27 | PR 10 | Unified Email Component | ✅ |
-| Sprint 3 | Jun 30 – Jul 11 | PR 11 + PR 11p | Agent Migration + Field-Tagging | Partial / ✅ |
-| Sprint 4 | Jul 14–25 | PR 12 | Context Blocks | ❌ |
+| Sprint 3 | Jun 30 – Jul 11 | PR 11 + PR 11p | Web Agent Cleanup + Field-Tagging | Partial / ✅ |
+| Sprint 4 | Jul 14–25 | PR 12 | Context Blocks + Surface Parity Wiring | ❌ |
 | Sprint 5 | Jul 28 – Aug 15 | PR 13 + PR 14 | Recommendations + Today Page | ✅ / ✅ |
 
 | Metric | Count |
 |--------|-------|
 | Epics | 5 |
-| Stories | 17 |
-| Tasks | 39 |
+| Stories | 20 |
+| Tasks | 55 |
 | PRs | 7 |
 | Decision Checkpoints | 3 |
 
