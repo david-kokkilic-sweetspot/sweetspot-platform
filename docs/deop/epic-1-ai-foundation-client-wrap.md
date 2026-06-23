@@ -257,3 +257,21 @@ An account with no fields, a null reader response, and reader exceptions all deg
 Verified with a clean build and **319/319** AI unit tests green — thirteen new tests (eight block + five EF reader), including archived-field exclusion, position ordering, only-archived-returns-empty, and account-scoped isolation.
 
 ---
+
+## Story 1.10 — Launch Readiness Documentation
+
+Documentation-only launch deliverables (scope brief v2 §5.1 + §5.9). Built on `deop/feature/launch-readiness-docs` and merged to `deop/integration`. Task 1.10.3 (§5.10 hour sign-off) is captured separately in `docs/deop/section-5.10-hour-signoff.md` and is unchanged here.
+
+### Task 1.10.1 — AI substrate handover README
+
+Shipped `src/backend/Core/AI/README.md` as the onboarding entry point for the AI substrate. The README documents every facet §5.9 requires: the wrapper API contract (`IAiClient` / tenant-scoped `ITenantAiClient`), the six-stage request pipeline, model selection (the `Sonnet`/`Haiku`/`Opus` `ModelClass` enum and the resolver precedence order), the cost model and the pre-provider daily spend cap, retry + fallback, schema validation with corrective-prompt retry, the content-filtering invariants (matched substrings never logged/persisted), usage-logging columns and audit linkage, and the multi-tenant isolation rules with service lifetimes.
+
+It also carries the §4.2 nine-block context catalogue as a status table (brand/org/industry/profile/event/brief/contact-fields shipped; knowledge 4.3.2 and field-semantics 4.2.1 in Sprint 4), a step-by-step "add a new feature" guide, a feature-key registry reference (Task 4.6.7), and an invariants checklist mapped to Pre-Launch Verification Gates 5.3.1 (substrate) and 5.3.2 (per-feature). Facts were drawn directly from the shipped code (`AiClientBase`, `AiModelResolver`, `DailyAiSpendCapEnforcer`, `ConfigurableAiContentFilter`, `AiUsageLogger`, the tenancy wrappers) rather than from the strategy doc, so the README matches the substrate as built.
+
+### Task 1.10.2 — Foundry models launch memo
+
+Shipped `docs/ai-foundry-models-launch-memo.md`, the one-page record of the model strings the wrapper will use on Azure Foundry. The memo documents the OpenAI-compatible HTTP transport (no vendor SDK), the `ModelClass → Ai:Models` deployment-name mapping, the per-feature class routing, the cost table + spend cap, and the fallback/region posture — all verified against `appsettings.common.json` and `AiModelResolver`.
+
+The embedding-dimensions decision is recorded as **3072 (resolved)**: `text-embedding-3-large` at 3072 dimensions, locked to the `kb_chunk.embedding vector(3072)` column and the Task 1.8.9 HNSW prerequisite, with the explicit note that changing it requires a migration plus a full KB re-embed. The memo deliberately flags the open spike items that cannot be settled from the codebase and need a live-Azure check before launch: the real Foundry deployment names (`Ai:Models` still holds Anthropic strings while `foundry-*-deployment` are cost-table placeholders), per-region capacity/rate limits, live Foundry pricing, embedding availability, and the data-residency region.
+
+---
