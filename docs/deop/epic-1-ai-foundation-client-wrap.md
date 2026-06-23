@@ -217,3 +217,43 @@ Shipped the §5.10 knowledge-base capture surface so customer documents can be i
 The Foundry embeddings adapter mirrors the chat transport pattern: `IAzureFoundryEmbeddingsTransport` + `AzureFoundryEmbeddingsTransport` (typed HttpClient binding the OpenAI-compatible `embeddings` endpoint), request/response wire models, and `AzureFoundryEmbeddingClient` that implements `IEmbeddingClient.EmbedBatchAsync` by splitting the input into `Ai:Embeddings:BatchSize`-sized requests and preserving caller order via each item's `index`. Configuration schema gained an `Ai:Embeddings` section (Provider=`azure-foundry`, ModelDeployment=`foundry-text-embedding-3-large`, Dimensions=3072, BatchSize=96, RequestTimeoutSeconds=60); env partials add the Key Vault `AiFoundryEmbeddingsApiKey` reference with BaseUrl wired at deploy time. DI adds the embeddings HTTP client + a transient `IEmbeddingClient → AzureFoundryEmbeddingClient` registration.
 
 Drive-by: `TenantDbContext.OnModelCreating` ignores `KbChunk.Embedding` under the EF in-memory provider so context-block unit tests still exercise the DbContext (InMemory cannot map the `Pgvector.Vector` CLR type). KB workflows run integration tests on a real Postgres instance so this never affects production paths. BFF KB endpoints (document upload, ingest workflow, similarity search) deferred to follow-up commits per Story 1.8 plan. Verified with `dotnet build` clean and 272/272 AI unit tests green — five new embedding-client tests cover empty input, single-batch ordering, multi-batch absolute-ordering, out-of-order index reconciliation, and out-of-range index rejection.
+
+---
+
+## Story 1.9 — Launch Context Blocks + Form Generation
+
+Added under Epic 1 per scope brief v2 §4.2 (nine launch context blocks) and §5.6 (basic form generation). The four new blocks (profile, event, brief, contact-fields) plus the existing brand/org/industry/knowledge/field-semantics complete the launch-required nine-block catalogue; the form-generate feature is the second AI-powered feature wired through the substrate after email-generate. Hotfix track runs in parallel with Sprints 3-4 on `deop/feat/story-1.9-launch-context-blocks`.
+
+### Task 1.9.2 — ProfileContextBlock
+
+Shipped the consumer block on top of the Task 1.8.2 organisation-profile reader seam. New `ProfileContext` record carries the §5.10 capture-surface tonal payload — audience description, customer-supplied tier vocabulary, programme vocabulary, terminology preferences, and up to `OrganisationProfileData.MaxVoiceSamples` voice exemplars — under a single `## Profile` markdown segment in `ToPromptString()`. Every field is tonal so there is no renderer-only / prompt-only split; the segment is dropped into prompts verbatim by feature builders.
+
+`ProfileContextBlock` follows the established reader-seam pattern: `Guid.Empty` is rejected up front per scope §7.2, `OperationCanceledException` propagates unchanged, and every other degradation path (missing profile row, reader returns null, reader throws) collapses to `ProfileContext.Empty` with a `Warning`-level log rather than a thrown exception. The block is registered as a singleton in `AddAiServices` next to the existing profile reader — no further infrastructure required for prompt builders to compose it.
+
+Verified with `dotnet build src/backend/Core/SSP.Core.sln` clean and **280/280** AI unit tests green — eight new tests covering empty-account rejection, missing-profile empty stub, populated render (all four tonal sections plus three voice samples, including the unlabelled fallback to "Sample N"), reader-side cap preservation (most-recent-first order across exactly `MaxVoiceSamples` rows), reader-exception degradation, cancellation propagation, null-options acceptance, and the static `Empty` invariant. Schema and reader are unchanged; only the consumer side moved.
+
+### Task 1.9.3 — EventContextBlock
+
+Shipped the Event context block on a new `event` tenant table. Because no events table existed, the task creates the minimal launch entity (`Event`: id, account_id, name, starts_at, location, registration_url, audit timestamps) following the Task 1.9.1 `Form` modelling pattern — app-supplied UUID, account FK with `Restrict` delete, account-composite index — plus the `AddEventsTable` EF migration. Richer event modelling (sessions, tickets) stays out of scope for the launch blocks and lands with the Events Create-with-AI surface (Task 4.6.4).
+
+The block is parameter-driven: it reads the event id from a new `EventContextOptions : AiContextOptions` derived record (per the base type's documented convention that narrow selectors live on derived records, not the base) and loads a single event through the `IEventReader` seam. `EventContext.ToPromptString()` renders a `## Event` segment with name, a deterministically-formatted UTC date, location, and registration URL. "No event selected" (null/empty option) is treated as a normal non-error path alongside the standard degradation set (missing row, null reader response, reader exception), all collapsing to `EventContext.Empty`; `OperationCanceledException` propagates and `Guid.Empty` accounts are rejected (scope §7.2).
+
+Verified with a clean solution build and **293/293** AI unit tests green — thirteen new tests (nine block + four EF reader), including the reader-not-invoked-when-no-event-id case and account-scoped read isolation.
+
+### Task 1.9.4 — BriefContextBlock
+
+Shipped the Brief context block on a new `event_brief` tenant table (`EventBrief`: id, account_id, event_id FK, positioning, key_messages as a Postgres `text[]`, target_audience, audit timestamps) plus the `AddEventBriefsTable` migration with account and event FKs (both `Restrict`) and an account/event composite index. The block pairs with the event block: it reuses the same `EventContextOptions.EventId` selector, so a feature composing both loads operational facts (event) and positioning/messaging (brief) for one event id.
+
+`BriefContextBlock` loads the most recent brief for the event through the `IBriefReader` seam and renders a `## Brief` segment (positioning, key messages joined with `; `, target audience). The degradation contract matches the event block exactly — no event selected, missing brief, null reader response, and reader exceptions all collapse to `BriefContext.Empty`, cancellation propagates, and `Guid.Empty` is rejected.
+
+Verified with a clean build and **306/306** AI unit tests green — thirteen new tests (eight block + five EF reader), including a most-recent-wins ordering test across two briefs and cross-account isolation.
+
+### Task 1.9.5 — ContactFieldsContextBlock
+
+Shipped the Contact-Fields context block with no new schema — it reads the already-shipped `contact_field_definition` table through a new `IContactFieldsReader` seam, returning only active (non-archived) definitions ordered by display position. `ContactFieldsContext.ToPromptString()` renders a `## Contact Fields` segment of merge tags in the form `{{field_key}} (Label): guidance [tags]`, so AI-generated copy references tags that resolve to each contact's value at send time. The block surfaces tag *definitions* only; the semantic field-tag metadata (segment keys, renewal relevance) remains the Field-Semantics block's job (Task 4.2.1), as the scope's coordination note requires.
+
+An account with no fields, a null reader response, and reader exceptions all degrade to `ContactFieldsContext.Empty`; cancellation propagates and `Guid.Empty` is rejected. With this block the §4.2 nine-block launch catalogue is complete: brand + org + industry (Story 1.4) + profile (1.9.2) + event (1.9.3) + brief (1.9.4) + contact-fields (1.9.5) + knowledge (4.3.2) + field-semantics (4.2.1).
+
+Verified with a clean build and **319/319** AI unit tests green — thirteen new tests (eight block + five EF reader), including archived-field exclusion, position ordering, only-archived-returns-empty, and account-scoped isolation.
+
+---
