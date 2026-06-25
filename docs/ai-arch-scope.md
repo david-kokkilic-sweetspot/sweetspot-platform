@@ -334,7 +334,8 @@ AI layer (to be mapped to .NET):
 | PR | Name | Scope | Customer-visible? | Line |
 |----|------|-------|-------------------|------|
 | PR 9 | Foundation + email-generate proof | AI client wrapper service (full — retry, model selection, output validation, content filtering, cost calc), usage logging, spend-cap enforcement, persisted content-filter outcomes, context blocks (brand, org, industry). Migrate email-generate as byte-identical proof of pattern. Extend ai_usage schema. Seed system/template field tags. | No | 459 |
-| PR 10 | Unified email-content component | Extract email generation UI to shared component. Refactor context contract. Build unified backend endpoint. Wire into journey editor. Context-aware CTA. | Yes — journey emails AI-generated | 460 |
+| PR 10a | Unified email backend + contract (Deop) | Unified email generation service, context type refactoring, BFF endpoint, headless caller support, integration contract & hand-off documentation. | Partial — headless callers work | 460 |
+| PR 10b | Angular email component (Click) | AIEmailModal refactor to shared component, journey editor wire-up, E2E tests. Depends on PR 10a. | Yes — journey emails AI-generated | 460 |
 | PR 11 | Web Agent cleanup + form/event confirmation migration | Form/event confirmation senders stop being treated as agents → journeys take over. Runtime conversation handling routes through Web Agent / inbox conversation model. HTML duplication gone. | Partial | 461 |
 | PR 11p | Field-tagging UI | Settings page for tagging contact fields with semantic labels. System fields read-only, template fields read-only, custom fields interactive + AI suggestion. Readiness %. | Yes | 462 |
 | PR 12 | Context blocks + AI surface parity wiring | Build remaining 7 context block services. Knowledge block generalised from Web Agent-only to all eligible features. Add explicit surface wiring tasks for Forms v2, field mapping, landing pages, Events Create-with-AI, Web Agent, profile research, insights/social/inbound classification, and feature-key registry. | No — substrate | 463 |
@@ -353,7 +354,7 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 
 ### Decision Checkpoints
 
-- [ ] **Week 4 (after PR 10):** Is the unified email component working as keystone? If not → cut journey-content to v2, lean on templates. (L481)
+- [ ] **Week 4 (after PR 10a):** Deop gate: Is the unified email BFF endpoint complete and tested (headless callers verified)? Click gate: Has Click engineering started Angular integration? If Deop passes but Click hasn't started → headless/API mode works, lean on templates for UI-triggered generation. (L481)
 - [ ] **Week 8 (after PR 12):** Is field-tagging UI shipped and users tagging? If not → audience block returns sparse data, Phase 2 at half power. (L483)
 - [ ] **Week 10 (after PR 13):** Is recommendation→action producing acceptable content? If not → allocate prompt-tuning time before PR 14. (L485)
 
@@ -444,7 +445,8 @@ Sprints 1–4 are 2 weeks each (10 working days). **Sprint 5 is compressed to 1 
 ### Dependency Chain
 ```
 PR 9 ──→ everything
-PR 10 ──→ PR 11 (Web Agent cleanup + confirmation handler migration), PR 13 (action handlers)
+PR 10a (Deop) ──→ PR 10b (Click, Angular UI), PR 11 (Web Agent cleanup), PR 13 (action handlers)
+PR 10b (Click) ──→ depends on PR 10a + Story 2.3 hand-off docs
 PR 11p ──→ field-semantics block, audience block, Phase 2 depth
 PR 12 ──→ PR 13 (rich contextual AI content)
 PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
@@ -455,7 +457,7 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 | Sprint | Start (Mon) | End (Fri) | PRs | Focus |
 |--------|-------------|-----------|-----|-------|
 | Sprint 1 | 2026-06-01 | 2026-06-12 | PR 9 | Foundation + Client Wrapper — _shipped_ |
-| Sprint 2 | 2026-06-15 | 2026-06-26 | PR 10 | Unified Email Component (5 tasks) |
+| Sprint 2 | 2026-06-15 | 2026-06-26 | PR 10a (Deop) + PR 10b (Click) | Unified Email Backend + Hand-Off Contract (Deop, 4 tasks). Angular UI integration (Click, 2 tasks — Click timeline). |
 | Sprint 3 | 2026-06-29 | 2026-07-10 | PR 11 (3.1.1 only) + PR 11p | Field-Tagging UI (3.2.x) + Product Agent Definition (3.1.1). 3.1.2 + 3.1.3 demoted to v1.1 per v2 brief (journey + Web Agent deferred). |
 | Sprint 4 | 2026-07-13 | 2026-07-24 | PR 12 (SPLIT) | Launch parts only: 4.2.1 (field-semantics) + 4.2.2 (audience) + 4.3.2 (knowledge) + 4.5.1 (composition registry) + 4.6.5a (knowledge wiring) + 4.6.7 (feature registry). Story 4.1, 4.3.1, 4.4.1, 4.6.1 refinement, 4.6.2/3/4/6 → v1.1 backlog. |
 | Sprint 5 | 2026-07-27 | 2026-08-01 | _no PR 13/14_ | EPIC 5 fully v1.1 per v2 brief (Recommendation Actions + Today Page deferred). Pre-Launch Verification Gates (5.3.1 + 5.3.2) run here + into Test & Polish. |
@@ -466,7 +468,7 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 | Test & Polish | 2026-08-03 | 2026-08-15 | — | QA, regression fixes, polish — no new feature code |
 
 ### Decision Checkpoints
-- **Week 4 (after PR 10):** Is the unified email component working as keystone? If not → cut journey-content to v2, lean on templates.
+- **Week 4 (after PR 10a):** Deop gate: Is the unified email BFF endpoint complete and tested (headless callers verified)? Click gate: Has Click engineering started Angular integration? If Deop passes but Click hasn't started → headless/API mode works, lean on templates for UI-triggered generation.
 - **Week 8 (after PR 12 launch parts):** Have the field-tagging UI + 9 launch context blocks shipped and is the composition registry routing them correctly? If not → tighten Story 1.9 / 4.x scope and prioritise email feature parity.
 - **Week 10 (Sprint 5):** Pre-Launch Verification Gates running clean? If not → focus Test & Polish window on gate remediation.
 
@@ -812,8 +814,20 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 ## EPIC 2: Unified Email-Content Component
 **Sprint 2 (Jun 16 – Jun 27)**
 
-### Story 2.1: Backend Unified Email Endpoint
-> All branded email generation from a single endpoint.
+### Ownership Split (updated 2026-06-23)
+
+| Owner | Stories | Scope | Hours |
+|-------|---------|-------|-------|
+| **Deop** | Story 2.1 + Story 2.3 | Unified email generation service, context type refactoring, BFF endpoint, integration contract & hand-off docs | 26h |
+| **Click engineering** | Story 2.2 | AIEmailModal Angular refactor, journey editor wire-up (depends on Deop Story 2.1 + 2.3 delivery) | 16h |
+
+**Rationale:** Deop's contracted scope covers AI architecture and backend services. Angular UI component work (Story 2.2) is frontend development outside Deop's scope — ownership follows the same pattern as Brand Kit (Click end-to-end, Deop consumes through seam) and Story 1.8 BFF endpoints (Deop delivers backend, Click consumes via Angular UIs).
+
+---
+
+### Story 2.1: Backend Unified Email Endpoint _(Deop)_
+> All branded email generation from a single headless-first endpoint.
+> _Status: complete — `IBrandedEmailGenerator`/`BrandedEmailGenerator` in `SSP.AI/Email/` (discriminated `EmailGenerationContext` + context-aware CTA), exposed via `POST /bff/accounts/{accountId}/emails/generate` → Admin `EmailGenerateWorkflow`. Routes through the shared `email-generate` feature key. Shipped on `deop/feature/unified-email-content-component`; 15 generator + 6 workflow tests green._
 
 **Task 2.1.1: Unified Email Generation Service**
 - Subtask: Implement `GenerateBrandedEmail({ intent, context, cta?, structuralOptions? })` service
@@ -832,26 +846,53 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 - Subtask: Load context blocks based on `kind`, compose prompt, call client wrapper
 - Depends on: 2.1.1, 2.1.2
 
-### Story 2.2: Angular Email Component Extraction
-> Extract existing ~300-line AIEmailModal to shared/reusable component.
+### Story 2.3: Integration Contract & Hand-Off Documentation _(Deop)_
+> Provide Click engineering with everything needed to integrate Story 2.2 against the BFF endpoint without Deop in the room.
+> _Status: complete — `src/backend/Core/AI/docs/unified-email-integration-contract.md` (endpoint + request/response shapes, error codes, context discriminator + CTA tables, headless caller pattern, four curl integration-test stubs). Doubles as the Week-4 Deop-gate verification._
 
-**Task 2.2.1: AIEmailModal Component Refactoring**
+**Task 2.3.1: Hand-Off Contract Documentation**
+- Subtask: Define unified email BFF endpoint contract (request/response shapes, error codes)
+- Subtask: Document headless caller pattern (API call without rendering modal/UI)
+- Subtask: Provide integration test stubs Click can run against the BFF endpoint
+- Subtask: Document context type discriminator behavior (`campaign_email | journey_step | standalone`)
+- Subtask: Document context-aware CTA behavior per context kind
+- Depends on: 2.1.3
+
+---
+
+### Story 2.2: Angular Email Component Extraction _(Click engineering — UI integration)_
+> Extract existing ~300-line AIEmailModal to shared/reusable component. **Ownership: Click engineering.** Depends on Deop delivering Story 2.1 BFF endpoint + Story 2.3 integration contract.
+
+**Task 2.2.1: AIEmailModal Component Refactoring** — _Click engineering_
 - Subtask: Analyze existing component
 - Subtask: Move to shared component under `src/frontend/src/app/shared/`
 - Subtask: Update email editor and journey editor integrations
-- Depends on: 2.1.3
+- Depends on: Story 2.3 (hand-off contract delivered by Deop)
 
-**Task 2.2.2: Journey Editor Wire-up**
+**Task 2.2.2: Journey Editor Wire-up** — _Click engineering_
 - Subtask: Call unified email component from journey editor
 - Subtask: Auto-populate journey step context
 - Subtask: E2E test: journey → AI email generation flow
 - Depends on: 2.2.1
 
-=== PR 10: Unified Email-Content Component ===
-> **Scope:** Shared email generation UI component, context type refactoring, unified backend endpoint, journey editor wire-up, context-aware CTA.
-> **Customer-visible:** Yes — journey emails can be AI-generated.
+---
+
+=== PR 10a: Unified Email Backend + Integration Contract (Deop) ===
+> **Scope:** Unified email generation service, context type refactoring, BFF endpoint, headless caller support, integration contract documentation.
+> **Customer-visible:** Partial — headless callers (recommendation action handlers) work; UI-triggered generation awaits PR 10b.
 > **Review:** End of Sprint 2 (Jun 27)
-> **🔴 Decision Checkpoint (Week 4):** Is the unified email component working as keystone?
+> **Independently deployable:** Yes — headless callers function without the Angular UI.
+
+=== PR 10b: Angular Email Component Integration (Click engineering) ===
+> **Scope:** AIEmailModal refactor to shared component, journey editor wire-up, E2E tests.
+> **Customer-visible:** Yes — journey emails can be AI-generated via UI.
+> **Depends on:** PR 10a delivered + Story 2.3 hand-off documentation.
+> **Timeline:** Click engineering schedule (not Deop sprint commitment).
+
+> **🔴 Decision Checkpoint (Week 4):**
+> - **Deop gate:** Is the unified email BFF endpoint complete and tested (headless callers verified)?
+> - **Click gate:** Has Click engineering started Angular integration against the contract?
+> - If Deop gate passes but Click gate hasn't started → fallback remains valid (headless/API mode; lean on templates for UI-triggered generation).
 
 ---
 
@@ -1146,7 +1187,7 @@ PR 13 ──→ PR 14 (Today page) + Phase 2 trust progression
 | Sprint | Dates | PR | Epic | Customer-Visible |
 |--------|-------|----|------|-------------------|
 | Sprint 1 | Jun 1–13 | PR 9 | Foundation & Client Wrapper | ❌ |
-| Sprint 2 | Jun 16–27 | PR 10 | Unified Email Component | ✅ |
+| Sprint 2 | Jun 16–27 | PR 10a (Deop) + PR 10b (Click) | Unified Email Backend + Angular UI | Partial (Deop) / ✅ (Click) |
 | Sprint 3 | Jun 30 – Jul 11 | PR 11 + PR 11p | Web Agent Cleanup + Field-Tagging | Partial / ✅ |
 | Sprint 4 | Jul 14–25 | PR 12 | Context Blocks + Surface Parity Wiring | ❌ |
 | Sprint 5 | Jul 28 – Aug 15 | PR 13 + PR 14 | Recommendations + Today Page | ✅ / ✅ |
