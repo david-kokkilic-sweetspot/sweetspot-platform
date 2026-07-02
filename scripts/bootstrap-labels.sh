@@ -28,9 +28,9 @@ create "sprint:5" "FBCA04" "Sprint 5 (Jul 28 – Aug 15 2026)"
 # PR
 create "pr:9"   "C5DEF5" "PR 9 — Foundation + email-generate proof"
 create "pr:10"  "C5DEF5" "PR 10 — Unified email-content component"
-create "pr:11"  "C5DEF5" "PR 11 — Form/event agent migration"
+create "pr:11"  "C5DEF5" "PR 11 — Web Agent cleanup + form/event confirmation migration"
 create "pr:11p" "C5DEF5" "PR 11p — Field-tagging UI"
-create "pr:12"  "C5DEF5" "PR 12 — Remaining context blocks"
+create "pr:12"  "C5DEF5" "PR 12 — Context blocks + AI surface parity wiring"
 create "pr:13"  "C5DEF5" "PR 13 — Recommendation action handlers"
 create "pr:14"  "C5DEF5" "PR 14 — Today page + Retain dashboard + command palette"
 

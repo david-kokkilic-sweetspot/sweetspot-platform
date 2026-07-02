@@ -27,8 +27,8 @@ These repos are not embedded as git submodules. They are cloned locally under `r
 Issues in this repo follow a three-level hierarchy:
 
 - **Epic** (`type:epic`) — Sprint-sized scope (5 total)
-- **Story** (`type:story`) — A feature within an Epic (sub-issue of Epic, 17 total)
-- **Task** (`type:task`) — Engineering work within a Story (sub-issue of Story, 39 total)
+- **Story** (`type:story`) — A feature within an Epic (sub-issue of Epic, 20 total)
+- **Task** (`type:task`) — Engineering work within a Story (sub-issue of Story, 55 total)
 - **Subtask** — Markdown checkboxes inside a Task body
 
 These are tracked on a user-level GitHub Project (v2) under `david-kokkilic-sweetspot`. The Project includes items from this repo **and** PRs from the linked code repositories — so progress is visible end-to-end on one board.

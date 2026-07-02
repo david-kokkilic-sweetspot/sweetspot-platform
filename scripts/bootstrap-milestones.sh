@@ -31,8 +31,8 @@ echo "Creating milestones in $REPO..."
 
 create_milestone "Sprint 1 — PR 9"           "2026-06-13" "Foundation + Client Wrapper (Jun 1 – Jun 13). Customer-visible: no."
 create_milestone "Sprint 2 — PR 10"          "2026-06-27" "Unified Email Component (Jun 16 – Jun 27). Customer-visible: yes. Decision checkpoint Week 4."
-create_milestone "Sprint 3 — PR 11 + PR 11p" "2026-07-11" "Agent Migration + Field-Tagging UI (Jun 30 – Jul 11). Customer-visible: partial/yes."
-create_milestone "Sprint 4 — PR 12"          "2026-07-25" "Remaining Context Blocks (Jul 14 – Jul 25). Customer-visible: no. Decision checkpoint Week 8."
+create_milestone "Sprint 3 — PR 11 + PR 11p" "2026-07-11" "Web Agent Cleanup + Field-Tagging UI (Jun 30 – Jul 11). Customer-visible: partial/yes."
+create_milestone "Sprint 4 — PR 12"          "2026-07-25" "Context Blocks + AI Surface Parity Wiring (Jul 14 – Jul 25). Customer-visible: no. Decision checkpoint Week 8."
 create_milestone "Sprint 5 — PR 13 + PR 14"  "2026-08-15" "Recommendations + Today Page (Jul 28 – Aug 15). Customer-visible: yes. Decision checkpoint Week 10."
 
 echo "Done."

@@ -59,16 +59,18 @@ Hours below are cloud/AI engineer hours only (the 545.5 bucket).
 | 1.8.9 | HNSW similarity index | planned | **4** | perf gate, dim decision dependent |
 | **Story 1.8 subtotal** | | mixed | **shipped ~48h + planned ~44h** | |
 
-### EPIC 2 — Sprint 2 (PR 10)
+### EPIC 2 — Sprint 2 (PR 10a Deop + PR 10b Click)
 
-| Task | Title | Status | Hours |
-|---|---|---|---|
-| 2.1.1 | Unified email generation service | planned | 10 |
-| 2.1.2 | Context type refactoring | planned | 6 |
-| 2.1.3 | BFF endpoint | planned | 8 |
-| 2.2.1 | AIEmailModal refactor | planned | 10 |
-| 2.2.2 | Journey editor wire-up | planned | 6 |
-| **EPIC 2 subtotal** | | planned | **40h** |
+| Task | Title | Status | Hours | Owner |
+|---|---|---|---|---|
+| 2.1.1 | Unified email generation service | planned | 10 | Deop |
+| 2.1.2 | Context type refactoring | planned | 6 | Deop |
+| 2.1.3 | BFF endpoint | planned | 8 | Deop |
+| 2.3.1 | Integration contract & hand-off docs | planned | 2 | Deop |
+| 2.2.1 | AIEmailModal refactor | planned | 10 | Click engineering |
+| 2.2.2 | Journey editor wire-up | planned | 6 | Click engineering |
+| **EPIC 2 Deop subtotal** | | planned | **26h** | Deop |
+| **EPIC 2 Click subtotal** | | planned | **16h** | Click engineering |
 
 ### EPIC 3 — Sprint 3 (PR 11 + PR 11p)
 
@@ -132,7 +134,8 @@ Hours below are cloud/AI engineer hours only (the 545.5 bucket).
 | Story 1.8 shipped | ~48h |
 | **Shipped subtotal** | **~228h** |
 | Story 1.8 planned (1.8.4/6/7/8/9) | ~44h |
-| EPIC 2 (Sprint 2) | 40h |
+| EPIC 2 Deop (Sprint 2) | 26h |
+| EPIC 2 Click engineering (Sprint 2) | 16h |
 | EPIC 3 launch portion (Sprint 3) | 36h |
 | Story 1.9 (Sprints 3-4 parallel) | 38h |
 | EPIC 4 launch portion (Sprint 4) | 64h |
