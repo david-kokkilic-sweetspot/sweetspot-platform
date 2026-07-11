@@ -10,10 +10,12 @@
 
 ## 1. What This Feature Does
 
-The form-generate feature takes a free-text brief (e.g., "membership renewal form with payment frequency choice") and produces a structured JSON form definition using AI. The definition is validated, persisted to the `forms` table, and the form_id is returned so the SPA can navigate to the form editor.
+The form-generate feature takes a free-text brief (e.g., "membership renewal form with payment frequency choice") and produces a structured JSON form definition using AI. Generation is **stateless** — the validated definition is returned for human review; **nothing is persisted**. Persisting a form (and minting its id) is a separate save/publish action owned by Click's Forms feature.
 
-**DEOP owns:** AI generation endpoint, prompt composition, context blocks, output schema validation, DB persistence.  
-**Click owns:** Form editor UI, form rendering, form templates, user-facing display.
+> **Change note (PR #111 review):** originally specced as stateful (persist to `forms`, return `formId`) per v2 brief §5.6. Following review it ships **stateless**, and the endpoint moved to the **Forms API** — aligning with brief §6, where the forms table/CRUD/UI are Click's. The §5.6-vs-§6 statefulness question is Stephi's to ratify.
+
+**DEOP owns:** AI generation endpoint, prompt composition, context blocks, output schema validation.  
+**Click owns:** Form editor UI, form rendering, form templates, user-facing display, the `forms` table + persistence.
 
 ---
 
@@ -38,23 +40,21 @@ Content-Type: application/json
 | `description` | string | ✅ | 1–2000 chars. Free-text brief describing the form. |
 | `titleHint` | string | ❌ | Max 120 chars. Optional title suggestion. |
 
-### Response (201 Created)
+### Response (200 OK)
 
 ```json
 {
-  "formId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "title": "Membership Renewal",
-  "definition": { ... },
-  "createdAt": "2026-06-25T12:00:00Z"
+  "definition": { ... }
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `formId` | UUID | Persisted form ID — use for `/forms/{formId}` navigation. |
 | `title` | string | AI-generated form title (echoed for convenience). |
 | `definition` | object | The full validated form definition (see §3 below). |
-| `createdAt` | ISO 8601 | UTC timestamp of creation. |
+
+Generation is stateless — no `formId` / `createdAt` is returned. Persisting the form (and minting its id) is Click's separate save/publish action.
 
 ---
 
@@ -78,11 +78,13 @@ This is the shape of the `definition` field in the response. It's also what's st
 |-------|------|----------|-------------|
 | `key` | string | ✅ | Max 64 chars. `snake_case` ASCII only (`^[a-z][a-z0-9_]*$`). Stable identifier. |
 | `label` | string | ✅ | Max 120 chars. Human-readable label. |
-| `type` | string | ✅ | One of: `text`, `email`, `phone`, `number`, `textarea`, `select`, `multiselect`, `checkbox`, `date` |
+| `type` | string | ✅ | One of: `text`, `email`, `phone`, `number`, `textarea`, `select`, `multiselect`, `checkbox`, `date`. For a **mapped** field the server overrides this with the type derived from the contact field (see §3.1). |
+| `contact_field_key` | string \| null | ❌ | `snake_case`, max 50 chars (matches `contact_field_definition.field_key varchar(50)`). The non-archived contact field this field binds to. `null` when the field maps to no contact field (e.g. a consent checkbox). The AI must pick a key from the account's available contact fields — it may not invent one. |
 | `required` | boolean | ✅ | Whether the field is mandatory. |
 | `placeholder` | string | ❌ | Max 120 chars. |
 | `help_text` | string | ❌ | Max 200 chars. One-line guidance. |
-| `options` | array | Conditional | **Required** when type is `select` or `multiselect`. 2–12 option objects. |
+| `options` | array | Conditional | **Required** when type is `select` or `multiselect`. 2–12 option objects. Dropped (`null`) for contact-bound fields — see §3.1. |
+| `options_source` | string \| null | ❌ | `contact_field` (options resolved at render from the bound contact field — no inline options), `static` (AI-authored inline list on an unmapped field), or `null` (field carries no options). |
 
 ### Option object (for select / multiselect fields)
 
@@ -90,6 +92,43 @@ This is the shape of the `definition` field in the response. It's also what's st
 |-------|------|----------|-------------|
 | `value` | string | ✅ | Max 64 chars. Programmatic value. |
 | `label` | string | ✅ | Max 64 chars. Display label. |
+
+### 3.1 Contact-field binding (server post-processing)
+
+Every generated field binds to the account's contact model. Before the AI call, the workflow loads
+the account's **non-archived** `contact_field_definition` rows (plus their non-archived
+`contact_field_option` picklist values) via `IContactFieldDefinitionResolver` (filtered to
+`!IsArchived`) and injects them into the prompt as an `## AVAILABLE CONTACT FIELDS` list, so the model
+maps each field to a real `field_key` rather than inventing one.
+
+After the AI returns and schema validation passes, the workflow rewrites the fields against that same
+set:
+
+- **Drift guard** — any field whose `contact_field_key` is non-null but **not** in the account's
+  non-archived set is **dropped** (logged at `Warning`). This protects against occasional model drift.
+- **Type derivation** — for a mapped field, `type` is forced from the contact field's
+  `contact_field_type` (the AI-chosen `type` is overridden). Mapping:
+
+  | contact_field_type | form `type` |
+  |--------------------|-------------|
+  | Text | `text` |
+  | Number | `number` |
+  | Date | `date` |
+  | Dropdown | `select` |
+  | Multi-select | `multiselect` |
+  | Checkbox | `checkbox` |
+  | URL | `text` |
+  | Email | `email` |
+  | Phone | `phone` |
+  | Long text | `textarea` |
+
+- **Option binding** — for a contact-bound `select` / `multiselect` field, inline `options` are **dropped**
+  (set to `null`) and `options_source` is set to `contact_field`; the renderer resolves the picklist from the
+  bound contact field at render time (not snapshotted into the definition). An unmapped `select` /
+  `multiselect` keeps its AI-authored list with `options_source: static`.
+- **Unmapped fields** (`contact_field_key` is `null`) pass through unchanged.
+- **Minimum-fields guard** — if fewer than **3** fields survive the binding pass, the request returns
+  **HTTP 502** (`"AI returned no fields mapping to your contact model"`).
 
 ---
 
@@ -109,6 +148,7 @@ This is the shape of the `definition` field in the response. It's also what's st
       "key": "full_name",
       "label": "Full Name",
       "type": "text",
+      "contact_field_key": "full_name",
       "required": true,
       "placeholder": "Enter your full name",
       "help_text": null,
@@ -118,6 +158,7 @@ This is the shape of the `definition` field in the response. It's also what's st
       "key": "email",
       "label": "Email Address",
       "type": "email",
+      "contact_field_key": "email",
       "required": true,
       "placeholder": "you@example.com",
       "help_text": "We'll send your renewal confirmation here",
@@ -127,6 +168,7 @@ This is the shape of the `definition` field in the response. It's also what's st
       "key": "membership_type",
       "label": "Membership Type",
       "type": "select",
+      "contact_field_key": "membership_type",
       "required": true,
       "placeholder": null,
       "help_text": "Select the membership tier you'd like to renew",
@@ -141,6 +183,7 @@ This is the shape of the `definition` field in the response. It's also what's st
       "key": "renewal_period",
       "label": "Renewal Period",
       "type": "select",
+      "contact_field_key": "renewal_period",
       "required": true,
       "placeholder": null,
       "help_text": null,
@@ -154,6 +197,7 @@ This is the shape of the `definition` field in the response. It's also what's st
       "key": "phone",
       "label": "Phone Number",
       "type": "phone",
+      "contact_field_key": "phone",
       "required": false,
       "placeholder": "+1 (555) 000-0000",
       "help_text": null,
@@ -163,6 +207,7 @@ This is the shape of the `definition` field in the response. It's also what's st
       "key": "comments",
       "label": "Additional Comments",
       "type": "textarea",
+      "contact_field_key": null,
       "required": false,
       "placeholder": "Anything you'd like us to know?",
       "help_text": null,
@@ -171,6 +216,11 @@ This is the shape of the `definition` field in the response. It's also what's st
   ]
 }
 ```
+
+> For `membership_type` and `renewal_period` the `options` shown are illustrative — at runtime they are
+> bound authoritatively from each mapped contact field's non-archived `contact_field_option` rows
+> (see §3.1). `comments` has `contact_field_key: null`, so it is kept as authored and binds to no
+> contact field.
 
 ---
 
@@ -259,27 +309,19 @@ The output goes through a multi-layer validation pipeline before persistence:
    - 3–12 fields
    - Field `key` matches `^[a-z][a-z0-9_]*$` (snake_case)
    - Field `type` is one of 9 allowed values
+   - `contact_field_key`, when present, is `snake_case` and ≤50 chars (`null` is allowed)
    - `select`/`multiselect` fields have 2–12 options
    - All string length limits enforced
 
 3. **Markdown fence stripping** — defensive parser removes ```` ```json ``` ```` fences if the model accidentally includes them.
 
+4. **Contact-field binding** (`FormGenerateWorkflow`) — after schema validation, fields are bound to the account's non-archived contact model: drift keys dropped, `type` derived from `contact_field_type`, `select`/`multiselect` options bound from `contact_field_option`, and a 3-field minimum re-checked (see §3.1). Whether a `contact_field_key` actually **exists** for the account is enforced here, not in FluentValidation, which has no account context.
+
 ---
 
-## 7. Database Storage
+## 7. Persistence
 
-The generated form is persisted to the `forms` table:
-
-| Column | Value |
-|--------|-------|
-| `id` | New UUID (returned as `formId`) |
-| `account_id` | Authenticated tenant account |
-| `prompt` | The original brief text |
-| `title` | AI-generated title |
-| `definition_json` | The full validated JSON (§4 above) stored verbatim |
-| `feature_key` | `"form-generate"` |
-| `created_at` | UTC timestamp |
-| `updated_at` | UTC timestamp |
+Generation is **stateless** — the `/generate` endpoint persists nothing. The `forms` table and its write path are owned by Click's Forms feature (brief §6); persisting a reviewed definition (and minting `formId`) happens on Click's separate save/publish action. The former DEOP-side `Form` entity, `forms` table, and its migration were removed in PR #111 (a `DropFormsTable` down-migration).
 
 ---
 
@@ -309,9 +351,9 @@ The generated form is persisted to the `forms` table:
 | `SSP.AI/Context/Org/OrgContext.cs` | Org context block |
 | `SSP.AI/Context/Industry/IndustryContext.cs` | Industry context block |
 | `SSP.AI/Context/Profile/ProfileContext.cs` | Profile context block |
-| `SSP.Admin.Api/Services/Forms/FormGenerateWorkflow.cs` | End-to-end orchestration |
-| `SSP.Admin.Api.Models/Forms/FormGenerateRequest.cs` | API request model |
-| `SSP.Admin.Api.Models/Forms/FormGenerateResponse.cs` | API response model |
+| `SSP.Forms.Api/Services/Forms/FormGenerateWorkflow.cs` | End-to-end orchestration |
+| `SSP.Forms.Api.Models/Forms/FormGenerateRequest.cs` | API request model |
+| `SSP.Forms.Api.Models/Forms/FormGenerateResponse.cs` | API response model |
 
 ---
 
